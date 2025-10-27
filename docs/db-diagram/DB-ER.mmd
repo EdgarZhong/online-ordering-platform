@@ -1,0 +1,58 @@
+erDiagram
+    restaurants {
+        int restaurant_id PK
+        varchar name
+        varchar address
+        varchar logo_url
+        text description
+    }
+
+    users {
+        int user_id PK
+        int restaurant_id FK "商户管理员所属的餐厅ID, 消费者此项为NULL"
+        varchar username
+        varchar password
+        varchar role "customer, merchant, superadmin"
+        varchar phone
+    }
+
+    categories {
+        int category_id PK
+        int restaurant_id FK
+        varchar name
+    }
+
+    dishes {
+        int dish_id PK
+        int category_id FK
+        int restaurant_id FK
+        varchar name
+        decimal price
+        varchar image_url
+    }
+
+    orders {
+        int order_id PK
+        int user_id FK "下单的消费者ID"
+        int restaurant_id FK "订单所属的餐厅ID"
+        decimal total_price
+        varchar status
+    }
+
+    order_items {
+        int item_id PK
+        int order_id FK
+        int dish_id FK
+        int quantity
+        decimal unit_price
+    }
+
+    restaurants ||--|{ users : "employs"
+    restaurants ||--|{ categories : "has"
+    restaurants ||--|{ dishes : "provides"
+    restaurants ||--|{ orders : "receives"
+    
+    users ||--o{ orders : "places"
+    categories ||--o{ dishes : "contains"
+    orders ||--|{ order_items : "details"
+    dishes ||--|{ order_items : "itemizes"
