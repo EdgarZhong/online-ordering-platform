@@ -46,10 +46,8 @@ public class UserDAOImpl implements UserDAO {
                 user.setCreatedAt(rs.getTimestamp("created_at"));
             }
         } finally {
-            // 确保资源被关闭
-            if (rs != null) rs.close();
-            if (pstmt != null) pstmt.close();
-            DBUtil.close(conn); // 使用工具类关闭连接
+            // 使用重载的close方法统一关闭所有资源
+            DBUtil.close(conn, pstmt, rs);
         }
 
         return user;
@@ -81,8 +79,8 @@ public class UserDAOImpl implements UserDAO {
             return pstmt.executeUpdate();
 
         } finally {
-            if (pstmt != null) pstmt.close();
-            DBUtil.close(conn);
+            // 统一关闭资源（即使ResultSet为null）
+            DBUtil.close(conn, pstmt, null);
         }
     }
 }

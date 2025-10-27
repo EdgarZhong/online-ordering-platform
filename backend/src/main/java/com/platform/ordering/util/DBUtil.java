@@ -70,6 +70,44 @@ public class DBUtil {
             try {
                 conn.close();
             } catch (SQLException e) {
+                e.printStackTrace(); // 在生产环境中，这里应该使用日志框架记录错误
+            }
+        }
+    }
+
+    /**
+     * 关闭数据库资源的重载方法
+     * <p>
+     * 按照ResultSet -> Statement -> Connection的顺序安全地关闭资源。
+     * 这是推荐在DAO中使用的关闭方法。
+     * </p>
+     *
+     * @param conn Connection对象，可以为null
+     * @param stmt Statement或PreparedStatement对象，可以为null
+     * @param rs   ResultSet对象，可以为null
+     */
+    public static void close(Connection conn, java.sql.Statement stmt, java.sql.ResultSet rs) {
+        // 1. 关闭结果集
+        if (rs != null) {
+            try {
+                rs.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        // 2. 关闭语句
+        if (stmt != null) {
+            try {
+                stmt.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        // 3. 关闭连接
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (SQLException e) {
                 e.printStackTrace();
             }
         }

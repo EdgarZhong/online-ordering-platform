@@ -100,6 +100,7 @@ online-ordering-platform/
 │   ├── Agile.md             # 敏捷开发简化版流程指导文件
 │   ├── development.md       # 项目开发指导文件，包含概念构思、开发计划，分工表格
 │   ├── product-backlog.md   # 项目的产品待办列表，指导功能规划、进度管理和任务分配
+│   ├── log.md               # 项目的开发详细日志，**每人在每次commit到远程时务必按照示例撰写日志**
 │   └── API.md               # 前后端API文档
 │
 └── database/                # 数据库脚本目录
@@ -110,6 +111,6 @@ online-ordering-platform/
 分工开发:
 - 后端团队成员（A, B, C）在 backend/ 目录下进行他们的Maven项目开发。
 - 前端团队成员（D, E）在 frontend/ 目录下进行他们的Vue.js项目开发。
-两个子项目统一在主仓库下管理。
+两个子项目统一在主仓库下管理，主分支为main
 
 **请前往[项目开发文档](./docs/development.md)仔细阅读并提出你的想法**
