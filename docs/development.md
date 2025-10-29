@@ -100,7 +100,77 @@ graph TD
 
 数据库选用 `PostgreSQL`。主键统一使用 `SERIAL` 类型实现自增，日期时间使用 `TIMESTAMP` 类型。模型的核心是 `restaurants` 表，所有业务数据表都通过 `restaurant_id` 外键与之关联，形成数据归属。
 
-![数据库ER图](./db-diagram/DB-ER.png)
+```mermaid
+erDiagram
+    restaurants {
+        int restaurant_id PK
+        varchar name
+        varchar address
+        varchar phone
+        varchar logo_url
+        text description
+    }
+
+    users {
+        int user_id PK
+        int restaurant_id FK "商户管理员所属的餐厅ID"
+        varchar username
+        varchar password
+        varchar role "customer, merchant, superadmin"
+        varchar phone
+    }
+
+    menus {
+        int menu_id PK
+        int restaurant_id FK
+        varchar name "例如: 午市套餐, 招牌单点"
+        text description
+    }
+
+    dishes {
+        int dish_id PK
+        int restaurant_id FK "菜品归属"
+        varchar name
+        varchar image_url
+        text description
+    }
+
+    menu_items {
+        int menu_item_id PK
+        int menu_id FK
+        int dish_id FK
+        decimal price "该菜品在此菜单中的特定售价"
+    }
+
+    orders {
+        int order_id PK
+        int user_id FK "下单的消费者ID"
+        int restaurant_id FK "订单所属的餐厅ID"
+        decimal total_price
+        varchar status
+    }
+
+    order_items {
+        int item_id PK
+        int order_id FK
+        int dish_id FK
+        int quantity
+        decimal unit_price "下单时快照单价"
+    }
+
+    restaurants ||--|{ users : "employs"
+    restaurants ||--|{ menus : "has"
+    restaurants ||--|{ dishes : "provides"
+    restaurants ||--|{ orders : "receives"
+    
+    users ||--o{ orders : "places"
+    
+    menus ||--|{ menu_items : "contains"
+    dishes ||--|{ menu_items : "appears in"
+
+    orders ||--|{ order_items : "details"
+    dishes ||--|{ order_items : "itemizes"
+```
 ER图已完成设计，逻辑设计与表结构设计将在~/database/schema.sql中体现
 
 ### 3. 产品待办列表 (Product Backlog)

@@ -23,11 +23,12 @@ public class UserDAOImpl implements UserDAO {
         ResultSet rs = null;
         User user = null;
 
-        String sql = "SELECT user_id, restaurant_id, username, password, role, phone, created_at FROM users WHERE username = ?";
+        // 根据新规范命名SQL变量
+        String sql_findByUsername = "SELECT user_id, restaurant_id, username, password, role, phone, created_at FROM users WHERE username = ?";
 
         try {
             conn = DBUtil.getConnection();
-            pstmt = conn.prepareStatement(sql);
+            pstmt = conn.prepareStatement(sql_findByUsername);
             pstmt.setString(1, username);
             rs = pstmt.executeQuery();
 
@@ -58,12 +59,12 @@ public class UserDAOImpl implements UserDAO {
         Connection conn = null;
         PreparedStatement pstmt = null;
 
-        // 注意：这里没有插入user_id，因为它是由数据库自增的
-        String sql = "INSERT INTO users (restaurant_id, username, password, role, phone) VALUES (?, ?, ?, ?, ?)";
+        // 根据新规范命名SQL变量
+        String sql_saveUser = "INSERT INTO users (restaurant_id, username, password, role, phone) VALUES (?, ?, ?, ?, ?)";
 
         try {
             conn = DBUtil.getConnection();
-            pstmt = conn.prepareStatement(sql);
+            pstmt = conn.prepareStatement(sql_saveUser);
 
             // restaurant_id可能为null
             if (user.getRestaurantId() != null) {

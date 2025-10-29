@@ -3,32 +3,40 @@ erDiagram
         int restaurant_id PK
         varchar name
         varchar address
+        varchar phone
         varchar logo_url
         text description
     }
 
     users {
         int user_id PK
-        int restaurant_id FK "商户管理员所属的餐厅ID, 消费者此项为NULL"
+        int restaurant_id FK "商户管理员所属的餐厅ID"
         varchar username
         varchar password
         varchar role "customer, merchant, superadmin"
         varchar phone
     }
 
-    categories {
-        int category_id PK
+    menus {
+        int menu_id PK
         int restaurant_id FK
-        varchar name
+        varchar name "例如: 午市套餐, 招牌单点"
+        text description
     }
 
     dishes {
         int dish_id PK
-        int category_id FK
-        int restaurant_id FK
+        int restaurant_id FK "菜品归属"
         varchar name
-        decimal price
         varchar image_url
+        text description
+    }
+
+    menu_items {
+        int menu_item_id PK
+        int menu_id FK
+        int dish_id FK
+        decimal price "该菜品在此菜单中的特定售价"
     }
 
     orders {
@@ -44,15 +52,18 @@ erDiagram
         int order_id FK
         int dish_id FK
         int quantity
-        decimal unit_price
+        decimal unit_price "下单时快照单价"
     }
 
     restaurants ||--|{ users : "employs"
-    restaurants ||--|{ categories : "has"
+    restaurants ||--|{ menus : "has"
     restaurants ||--|{ dishes : "provides"
     restaurants ||--|{ orders : "receives"
     
     users ||--o{ orders : "places"
-    categories ||--o{ dishes : "contains"
+    
+    menus ||--|{ menu_items : "contains"
+    dishes ||--|{ menu_items : "appears in"
+
     orders ||--|{ order_items : "details"
     dishes ||--|{ order_items : "itemizes"
