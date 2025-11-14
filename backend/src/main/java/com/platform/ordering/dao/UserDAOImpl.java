@@ -56,32 +56,42 @@ public class UserDAOImpl implements UserDAO {
 
     @Override
     public int save(User user) throws SQLException {
+        // 这是旧方法，用于非事务性调用
         Connection conn = null;
-        PreparedStatement pstmt = null;
+        try {
+            conn = DBUtil.getConnection();
+            return save(user, conn);
+        } finally {
+            DBUtil.close(conn, null, null);
+        }
+    }
 
-        // 根据新规范命名SQL变量
+    @Override
+    public int save(User user, Connection conn) throws SQLException {
+        PreparedStatement pstmt = null;
         String sql_saveUser = "INSERT INTO users (restaurant_id, username, password, role, phone) VALUES (?, ?, ?, ?, ?)";
 
         try {
-            conn = DBUtil.getConnection();
+            // 使用传入的Connection，而不是自己获取
             pstmt = conn.prepareStatement(sql_saveUser);
 
-            // restaurant_id可能为null
             if (user.getRestaurantId() != null) {
                 pstmt.setInt(1, user.getRestaurantId());
             } else {
                 pstmt.setNull(1, java.sql.Types.INTEGER);
             }
             pstmt.setString(2, user.getUsername());
-            pstmt.setString(3, user.getPassword()); // 实际项目应加密
+            pstmt.setString(3, user.getPassword());
             pstmt.setString(4, user.getRole());
             pstmt.setString(5, user.getPhone());
 
             return pstmt.executeUpdate();
 
         } finally {
-            // 统一关闭资源（即使ResultSet为null）
-            DBUtil.close(conn, pstmt, null);
+            // 在事务中，只关闭PreparedStatement，不关闭Connection
+            if (pstmt != null) {
+                pstmt.close();
+            }
         }
     }
 }

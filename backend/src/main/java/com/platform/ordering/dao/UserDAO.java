@@ -1,8 +1,9 @@
 package com.platform.ordering.dao;
 
-import com.platform.ordering.model.User;
-
+import java.sql.Connection;
 import java.sql.SQLException;
+
+import com.platform.ordering.model.User;
 
 /**
  * 用户数据访问对象接口 (UserDAO)
@@ -13,25 +14,20 @@ import java.sql.SQLException;
  */
 public interface UserDAO {
 
-    /**
-     * 根据用户名查找用户
-     *
-     * @param username 用户名
-     * @return 如果找到，返回User对象；否则返回null
-     */
     User findByUsername(String username) throws SQLException;
 
     /**
-     * 新增一个用户
-     *
+     * 新增一个用户 (非事务性，方法内部自己管理连接)
      * @param user 待保存的用户对象
-     * @return 返回影响的行数，通常是1表示成功
+     * @return 返回影响的行数
      */
     int save(User user) throws SQLException;
 
-    // 未来可以根据需要添加更多方法，例如：
-    // User findById(int userId);
-    // List<User> findAll();
-    // int update(User user);
-    // int delete(int userId);
+    /**
+     * 新增一个用户 (在指定的数据库连接上执行，用于事务)
+     * @param user 待保存的用户对象
+     * @param conn 外部传入的数据库连接
+     * @return 返回影响的行数
+     */
+    int save(User user, Connection conn) throws SQLException;
 }
