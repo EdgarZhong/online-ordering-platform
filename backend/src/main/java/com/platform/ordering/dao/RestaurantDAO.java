@@ -26,4 +26,10 @@ public interface RestaurantDAO {
      * @throws SQLException SQL异常
      */
     Restaurant save(Restaurant restaurant, Connection conn) throws SQLException;
+
+    Restaurant findById(int restaurantId) throws SQLException;
+
+    int update(Restaurant restaurant) throws SQLException;
+
+    int deleteById(int restaurantId) throws SQLException;
 }

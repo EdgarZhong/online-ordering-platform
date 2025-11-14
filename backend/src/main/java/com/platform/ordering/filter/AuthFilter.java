@@ -1,13 +1,27 @@
+/*
+ * @Author: EdgarZhong 18518713412@163.com
+ * @Date: 2025-10-27 17:15:41
+ * @LastEditors: EdgarZhong 18518713412@163.com
+ * @LastEditTime: 2025-11-14 19:25:23
+ * @FilePath: \final\online-ordering-platform\backend\src\main\java\com\platform\ordering\filter\AuthFilter.java
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 package com.platform.ordering.filter;
 
-import com.platform.ordering.model.User;
+import java.io.IOException;
 
-import javax.servlet.*;
+import javax.servlet.Filter;
+import javax.servlet.FilterChain;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
 import javax.servlet.annotation.WebFilter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import java.io.IOException;
+
+import com.platform.ordering.model.User;
 
 /**
  * 后台访问权限过滤器 (AuthFilter)
@@ -45,7 +59,15 @@ public class AuthFilter implements Filter {
         }
 
         if (isLoggedIn && hasPermission) {
-            // 用户已登录且有权限，继续访问
+            User user = (User) session.getAttribute("user");
+            if ("merchant".equals(user.getRole())) {
+                Integer restaurantId = user.getRestaurantId();
+                if (restaurantId == null) {
+                    httpResponse.sendRedirect(httpRequest.getContextPath() + "/login.jsp");
+                    return;
+                }
+                request.setAttribute("restaurantId", restaurantId);
+            }
             chain.doFilter(request, response);
         } else {
             // 用户未登录或权限不足，重定向到登录页面

@@ -16,7 +16,7 @@ WITH new_restaurant AS (
     RETURNING restaurant_id
 )
 INSERT INTO users (restaurant_id, username, password, role, phone)
-SELECT restaurant_id, 'testmerchant', 'password123', 'merchant', '13800138001' FROM new_restaurant;
+SELECT restaurant_id, 'testmerchant', '123123', 'merchant', '13800138001' FROM new_restaurant;
 
 -- 餐厅 2: 美味快餐店 (ID=2), 商户: merchant2 (ID=2)
 WITH new_restaurant AS (
@@ -25,34 +25,34 @@ WITH new_restaurant AS (
     RETURNING restaurant_id
 )
 INSERT INTO users (restaurant_id, username, password, role, phone)
-SELECT restaurant_id, 'merchant2', 'password123', 'merchant', '13900139002' FROM new_restaurant;
+SELECT restaurant_id, 'merchant2', '123123', 'merchant', '13900139002' FROM new_restaurant;
 
 -- ====================================================================
 -- 消费者用户
 -- ====================================================================
 -- 消费者 1: testcustomer (ID=3)
 INSERT INTO users (username, password, role, phone)
-VALUES ('testcustomer', 'password123', 'customer', '13700137003');
+VALUES ('testcustomer', '123123', 'customer', '13700137003');
 
 -- ====================================================================
 -- 菜品库 (Dishes - Raw Materials)
 -- ====================================================================
 -- 餐厅 1 的菜品库
-INSERT INTO dishes (restaurant_id, name, description)
+INSERT INTO dishes (restaurant_id, name, description, default_price)
 VALUES
-    (1, '红烧牛肉面', '精选牛腩，慢火熬制，汤头浓郁'), -- dish_id=1
-    (1, '老坛酸菜鱼', '酸爽开胃，鱼肉嫩滑'),         -- dish_id=2
-    (1, '香酥鸡排', '外酥里嫩，鲜嫩多汁'),         -- dish_id=3
-    (1, '冰镇可乐', '经典碳酸饮料'),             -- dish_id=4
-    (1, '鲜榨西瓜汁', '夏季解暑必备');             -- dish_id=5
+    (1, '红烧牛肉面', '精选牛腩，慢火熬制，汤头浓郁', 32.00), -- dish_id=1
+    (1, '老坛酸菜鱼', '酸爽开胃，鱼肉嫩滑', 28.00),         -- dish_id=2
+    (1, '香酥鸡排', '外酥里嫩，鲜嫩多汁', 15.00),         -- dish_id=3
+    (1, '冰镇可乐', '经典碳酸饮料', 6.00),             -- dish_id=4
+    (1, '鲜榨西瓜汁', '夏季解暑必备', 12.00);             -- dish_id=5
 
 -- 餐厅 2 的菜品库
-INSERT INTO dishes (restaurant_id, name, description)
+INSERT INTO dishes (restaurant_id, name, description, default_price)
 VALUES
-    (2, '双层芝士牛肉堡', '双倍牛肉，双倍满足'), -- dish_id=6
-    (2, '香辣鸡腿堡', '整块鸡腿肉，香辣过瘾'),   -- dish_id=7
-    (2, '美式薯条', '外脆内绵，盐香四溢'),     -- dish_id=8
-    (2, '冰镇可乐', '经典碳酸饮料');             -- dish_id=9 (注意：这是餐厅2的可乐)
+    (2, '双层芝士牛肉堡', '双倍牛肉，双倍满足', 25.00), -- dish_id=6
+    (2, '香辣鸡腿堡', '整块鸡腿肉，香辣过瘾', 22.00),   -- dish_id=7
+    (2, '美式薯条', '外脆内绵，盐香四溢', 12.00),     -- dish_id=8
+    (2, '冰镇可乐', '经典碳酸饮料', 5.00);             -- dish_id=9 (注意：这是餐厅2的可乐)
 
 -- ====================================================================
 -- 菜单与菜单项 (Menus and Menu Items)

@@ -57,4 +57,66 @@ public class RestaurantDAOImpl implements RestaurantDAO {
         }
         return null;
     }
+
+    @Override
+    public Restaurant findById(int restaurantId) throws SQLException {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        String sql_findById = "SELECT restaurant_id, name, address, phone, description, logo_url FROM restaurants WHERE restaurant_id = ?";
+        try {
+            conn = DBUtil.getConnection();
+            pstmt = conn.prepareStatement(sql_findById);
+            pstmt.setInt(1, restaurantId);
+            rs = pstmt.executeQuery();
+            if (rs.next()) {
+                Restaurant r = new Restaurant();
+                r.setRestaurantId(rs.getInt("restaurant_id"));
+                r.setName(rs.getString("name"));
+                r.setAddress(rs.getString("address"));
+                r.setPhone(rs.getString("phone"));
+                r.setDescription(rs.getString("description"));
+                try { r.setLogoUrl(rs.getString("logo_url")); } catch (Exception ignored) {}
+                return r;
+            }
+        } finally {
+            DBUtil.close(conn, pstmt, rs);
+        }
+        return null;
+    }
+
+    @Override
+    public int update(Restaurant restaurant) throws SQLException {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        String sql_update = "UPDATE restaurants SET name = ?, address = ?, phone = ?, description = ?, logo_url = ? WHERE restaurant_id = ?";
+        try {
+            conn = DBUtil.getConnection();
+            pstmt = conn.prepareStatement(sql_update);
+            pstmt.setString(1, restaurant.getName());
+            pstmt.setString(2, restaurant.getAddress());
+            pstmt.setString(3, restaurant.getPhone());
+            pstmt.setString(4, restaurant.getDescription());
+            pstmt.setString(5, restaurant.getLogoUrl());
+            pstmt.setInt(6, restaurant.getRestaurantId());
+            return pstmt.executeUpdate();
+        } finally {
+            DBUtil.close(conn, pstmt, null);
+        }
+    }
+
+    @Override
+    public int deleteById(int restaurantId) throws SQLException {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        String sql_delete = "DELETE FROM restaurants WHERE restaurant_id = ?";
+        try {
+            conn = DBUtil.getConnection();
+            pstmt = conn.prepareStatement(sql_delete);
+            pstmt.setInt(1, restaurantId);
+            return pstmt.executeUpdate();
+        } finally {
+            DBUtil.close(conn, pstmt, null);
+        }
+    }
 }

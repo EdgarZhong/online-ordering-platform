@@ -1,3 +1,11 @@
+/*
+ * @Author: EdgarZhong 18518713412@163.com
+ * @Date: 2025-10-30 01:01:14
+ * @LastEditors: EdgarZhong 18518713412@163.com
+ * @LastEditTime: 2025-11-15 03:01:09
+ * @FilePath: \final\online-ordering-platform\backend\src\main\java\com\platform\ordering\model\MenuItem.java
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 package com.platform.ordering.model;
 
 import java.math.BigDecimal;
@@ -15,6 +23,8 @@ public class MenuItem {
     private int menuId;
     private int dishId;
     private BigDecimal price;
+    private int quantity;
+    private int sortOrder;
 
     public MenuItem() {
     }
@@ -51,5 +61,21 @@ public class MenuItem {
 
     public void setPrice(BigDecimal price) {
         this.price = price;
+    }
+
+    public int getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(int quantity) {
+        this.quantity = quantity;
+    }
+
+    public int getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
     }
 }

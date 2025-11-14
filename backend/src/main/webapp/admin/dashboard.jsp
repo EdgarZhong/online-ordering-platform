@@ -38,6 +38,12 @@
         </div>
     </div>
 
+    <div class="mt-4">
+        <a class="btn btn-outline-primary me-2" href="${pageContext.request.contextPath}/admin/menus">进入菜单管理</a>
+        <a class="btn btn-outline-success me-2" href="${pageContext.request.contextPath}/admin/dishes">进入菜品管理</a>
+        <a class="btn btn-outline-secondary" href="${pageContext.request.contextPath}/admin/restaurant">编辑店铺信息</a>
+    </div>
+
 </main>
 
 <jsp:include page="footer.jsp" />
