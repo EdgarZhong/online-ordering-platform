@@ -2,6 +2,29 @@
 
 ## 2025-11-15 - by 钟丞
 
+### 本次提交内容：为 order_items 持久化菜单ID并完善查询响应
+
+完成订单项持久化 `menu_id` 字段及相关联动，提升审计与对账能力，并在订单详情响应中返回 `menuId/menuName`。
+
+#### 变更摘要
+- Schema 扩展：`database/schema.sql` 在 `order_items` 新增 `menu_id` 外键至 `menus(menu_id)`；初始化脚本适配（写入 `menu_id`）。
+- 模型与接口：
+  - `backend/src/main/java/com/platform/ordering/model/OrderItem.java` 增加 `menuId/menuName` 字段
+  - `backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java`：
+    - 下单写入 `menu_id`（按 `menuId+dishId` 联合验证并取价）
+    - 订单详情查询联接 `menus` 返回 `menuId/menuName` 并在 JSON 输出
+- 初始化数据：`database/initial-data.sql` 示例订单项补充 `menu_id`，并新增多用户/多餐厅订单样例（A/B/C/D）
+- 测试页：`backend/src/main/webapp/test/api-tests.jsp` 增加订单详情快捷查询与错误用例按钮（跨餐厅、无效组合）
+- 文档：`docs/API.md` 增加“测试指引”与订单项字段说明（含历史兼容备注）
+
+#### 测试结果
+- 订单A（餐厅1、套餐菜单）在详情中正确显示 `menuId=2`、`menuName=工作日午市套餐`，总价与单价快照一致。
+- 成功下单与错误用例（跨餐厅、无效组合）返回符合预期的状态码与错误信息。
+
+---
+
+## 2025-11-15 - by 钟丞
+
 ### 本次提交内容：Sprint 3 实现 GET API
 
 完成消费者端只读 API 的首批落地与部署测试页面，契约与文档对齐，支持在无前端情况下完成端到端验证。
