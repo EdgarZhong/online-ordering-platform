@@ -12,7 +12,7 @@
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" style="white-space: nowrap;">
     <div class="container-fluid">
         <a class="navbar-brand" href="${pageContext.request.contextPath}/admin/dashboard.jsp">商户后台管理</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">

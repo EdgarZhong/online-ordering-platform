@@ -1,6 +1,66 @@
 # 开发日志
 
-## 2025-10-29 - by 团队 (A, B, C, D, E)
+## 2025-11-15 - by 钟丞
+
+### 本次提交内容：菜品&菜单管理阶段总结（Sprint 2 迭代中）
+
+本次变更聚焦“菜单编辑拖拽排序保存丢失”的后端稳健化修复与交互统一，确保在最小改动前提下彻底解决问题，并进行少量安全与显示优化。
+
+#### 已测试无误的功能列表：
+- 编辑菜单页内菜品拖拽仅在把手按住时触发；保存后顺序与菜品项均能正确持久化（`backend/src/main/webapp/admin/menu-edit-panel.jsp:105-137`，`backend/src/main/java/com/platform/ordering/controller/MenuServlet.java:157-178,224-263,373-407`）。
+- 展示页菜单列表拖拽仅在把手按住时触发；重排后服务端接收并更新排序（`backend/src/main/webapp/admin/menu-management.jsp:109-133`，`backend/src/main/java/com/platform/ordering/controller/MenuServlet.java:338-350`）。
+- 新建与编辑菜单保存的数据库事务逻辑正常提交；编辑视图中的草稿数据模型（`sessionScope.menuDraft`）正确构建并转换为待持久化行（`backend/src/main/java/com/platform/ordering/controller/MenuServlet.java:47-69,76-92,157-178,224-263`）。
+- 菜单管理页底部只读菜品列表为空时显示“去菜品页添加菜品”按钮，跳转至新建菜品视图（`backend/src/main/webapp/admin/menu-management.jsp:172-176`，`backend/src/main/java/com/platform/ordering/controller/DishServlet.java:54-57`）。
+- 所有列表的表头列标题与操作按钮统一为单行展示，不再换行（`backend/src/main/webapp/admin/menu-management.jsp:25,71,142-144`，`backend/src/main/webapp/admin/dish-management.jsp:24`）。
+- 删除菜单操作弹窗确认，避免误删（`backend/src/main/webapp/admin/menu-management.jsp:46-50`）。
+
+---
+### 代码修改 Timeline
+*在“菜单&菜品管理前后端既CRUD基本完成”commit基础上：*
+
+1. 后端保存稳健化：新增 `rowsPayload` 解析方法，统一行数据原子性，避免多数组索引错位（`MenuServlet.java:373-407`）。
+2. 新建/编辑保存路径优先使用 `rowsPayload` 构造持久化行；为空时回退旧数组逻辑或草稿（`MenuServlet.java:157-178,224-237`）。
+3. 编辑保存事务的删除语句增加租户过滤，确保多租户隔离（`DELETE ... USING menus ...`）（`MenuServlet.java:227-229`）。
+4. 编辑面板拖拽交互：加入把手类与 `mousedown` 标记，仅在把手拖拽时允许 `dragstart`（`menu-edit-panel.jsp:64,89,111-121`）。
+5. 展示页菜单列表拖拽交互统一为只在把手触发（`menu-management.jsp:52,109-133`）。
+6. 只读菜品列表空状态替换为“去菜品页添加菜品”入口（`menu-management.jsp:172-176`）。
+7. 表头与操作列统一 `text-nowrap`，防止列标题与按钮换行（`menu-management.jsp:25,71,142-144`；`dish-management.jsp:24,36-43`）。
+8. 删除菜单加入确认弹窗（`menu-management.jsp:46-50`）。
+9. 新建测试脚本验证租户隔离 `webapp/test/tenant-data.jsp`
+---
+### 遇到的问题与解决历程
+
+1) 拖拽保存后丢失项（根因与修复）
+- 根因：编辑保存采用“先删后重建”，对 `dishId/price/quantity/sortOrder` 多数组索引对齐依赖强；拖拽与数量清零会造成索引错位或行被前端剔除，导致漏插入。
+- 修复：新增 `parseRowsPayload`，将每行封装为 `dishId:price:qty:idx` 的原子数据，后端统一解析并重建；当 `rowsPayload` 缺失时回退旧数组逻辑或草稿（`MenuServlet.java:373-407,157-178,224-237`）。
+
+2) 多租户隔离缺失（安全修复）
+- 现象：编辑保存事务中的 `DELETE FROM menu_items WHERE menu_id=?` 未携带租户过滤，有跨租户误删风险。
+- 修复：改为 `DELETE FROM menu_items USING menus WHERE menu_items.menu_id=? AND menu_items.menu_id=menus.menu_id AND menus.restaurant_id=?`（`MenuServlet.java:227-229`）。
+
+3) 把手限制后拖拽不可用（交互修复）
+- 现象：`dragstart` 的事件 `target` 常为整行，直接检测把手节点会阻止拖拽。
+- 修复：加入 `mousedown` 标记 `allowRowDrag` 并在 `dragstart` 基于标记判断，仅当把手按下时允许拖拽；释放后重置标记（`menu-edit-panel.jsp:111-121`，`menu-management.jsp:109-117`）。
+
+---
+### 设计方法补充：编辑/新建菜单的事务与草稿数据模型
+
+- 事务设计（JDBC 手动事务）：
+  - 新建保存：先插入 `menus` 获取新 `menu_id`，再批量插入 `menu_items`，成功后 `commit`，异常时 `rollback`（`MenuServlet.java:141-191`）。
+  - 编辑保存：更新 `menus` 基本信息后，删除旧 `menu_items` 并按表单或草稿重建，最后 `commit`，异常时 `rollback`（`MenuServlet.java:213-263`）。
+
+- 草稿数据模型（`sessionScope.menuDraft`）：
+  - 进入编辑视图时从数据库现状构建 `DraftMenu` + `DraftMenuItem` 列表，便于前端编辑与顺序控制（`MenuServlet.java:47-69`）。
+  - 保存时若前端未提供完整数组，回退使用草稿列表作为持久化数据源，保证编辑体验与数据完整性（`MenuServlet.java:175-176,248-251`）。
+
+---
+### 后续工作（暂缓项）
+- 用“差异更新”替代“删除重建”，避免主键重建与潜在误删。
+- 在服务端进行重复 `dishId` 校验与友好错误提示。
+- `.gitattributes` 规范行尾策略，提升跨平台协作一致性。
+
+
+## 2025-11-14 - by 钟丞
 
 ### 本次提交内容：Sprint 1 全部开发任务完成
 

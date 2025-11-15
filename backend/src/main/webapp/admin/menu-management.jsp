@@ -7,7 +7,7 @@
 <main>
     <div class="row">
         <div class="col-md-12">
-            <h2>菜单与菜品管理</h2>
+            <h2>菜单管理</h2>
         </div>
     </div>
 
@@ -22,7 +22,14 @@
             <h4>菜单列表</h4>
             <table id="menu-list-table" class="table table-striped">
                 <thead>
-                <tr><th>序号</th><th>名称</th><th>套餐</th><th>描述</th><th>操作</th><th>拖拽</th></tr>
+                <tr>
+                    <th class="text-nowrap">序号</th>
+                    <th class="text-nowrap">名称</th>
+                    <th class="text-nowrap">套餐</th>
+                    <th class="text-nowrap">描述</th>
+                    <th class="text-nowrap">操作</th>
+                    <th class="text-nowrap">拖拽以排序</th>
+                </tr>
                 </thead>
                 <tbody>
                 <c:choose>
@@ -33,7 +40,7 @@
                                 <td>${m.name}</td>
                                 <td><c:if test="${m['package']}">√</c:if></td>
                                 <td>${m.description}</td>
-                                <td>
+                                <td class="text-nowrap">
                                     <a class="btn btn-sm btn-outline-secondary" href="${pageContext.request.contextPath}/admin/menus?action=edit&menuId=${m.menuId}">编辑</a>
                                     <c:choose>
                                         <c:when test="${selectedMenuId == m.menuId}">
@@ -46,10 +53,10 @@
                                     <form class="d-inline" method="post" action="${pageContext.request.contextPath}/admin/menus">
                                         <input type="hidden" name="action" value="delete" />
                                         <input type="hidden" name="menuId" value="${m.menuId}" />
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确认删除该菜单？删除后不可恢复')">删除</button>
                                     </form>
                                 </td>
-                                <td class="text-muted">☰</td>
+                                <td class="text-muted drag-handle">☰</td>
                             </tr>
                         </c:forEach>
                         <tr>
@@ -68,7 +75,11 @@
                 <h5 class="mt-3">${selectedMenuName}包含的菜品</h5>
                 <table class="table table-striped">
                     <thead>
-                    <tr><th>菜品名称</th><th>菜单内单价</th><th>数量</th></tr>
+                    <tr>
+                        <th class="text-nowrap">菜品名称</th>
+                        <th class="text-nowrap">菜单内单价</th>
+                        <th class="text-nowrap">数量</th>
+                    </tr>
                     </thead>
                     <tbody>
                     <c:forEach var="mi" items="${menuItems}">
@@ -109,9 +120,11 @@
       var tbody=document.querySelector('#menu-list-table tbody');
       if(!tbody) return;
       var dragSrc;
+      var allowRowDrag=false;
+      tbody.addEventListener('mousedown',function(e){ allowRowDrag=!!e.target.closest('.drag-handle'); });
       tbody.addEventListener('dragstart',function(e){
         var tr=e.target.closest('tr[draggable="true"]');
-        if(!tr) return; dragSrc=tr; e.dataTransfer.effectAllowed='move';
+        if(!tr) return; if(!allowRowDrag){ e.preventDefault(); return; } dragSrc=tr; e.dataTransfer.effectAllowed='move';
       });
       tbody.addEventListener('dragover',function(e){ e.preventDefault(); });
       tbody.addEventListener('drop',function(e){
@@ -125,6 +138,7 @@
         var ids=[]; rows.forEach(function(r,idx){ ids.push(r.getAttribute('data-id')); r.children[0].textContent=idx+1; });
         var body='action=reorder&order='+encodeURIComponent(ids.join(','));
         fetch('${pageContext.request.contextPath}/admin/menus',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});
+        allowRowDrag=false;
       });
     })();
     </script>
@@ -134,18 +148,20 @@
         <div class="col-md-12">
             <h4>菜品列表</h4>
             <table class="table table-striped">
-                <thead>
-                <tr>
-                    <th>ID</th><th>名称</th><th>默认价</th><th>创建日期</th><th>描述</th>
-                    <c:if test="${not empty editMenu}"><th>添加到菜单</th></c:if>
-                </tr>
-                </thead>
+                    <thead>
+                    <tr>
+                        <th class="text-nowrap">名称</th>
+                        <th class="text-nowrap">默认价</th>
+                        <th class="text-nowrap">创建日期</th>
+                        <th class="text-nowrap">描述</th>
+                        <c:if test="${not empty editMenu}"><th class="text-nowrap">添加到菜单</th></c:if>
+                    </tr>
+                    </thead>
                 <tbody>
                 <c:choose>
                     <c:when test="${not empty dishes}">
                         <c:forEach var="d" items="${dishes}">
                             <tr>
-                                <td>${d.dishId}</td>
                                 <td>${d.name}</td>
                                 <td><fmt:formatNumber value="${d.defaultPrice}" type="number" minFractionDigits="2" /></td>
                                 <td><fmt:formatDate value="${d.createdAt}" pattern="yyyy-MM-dd HH:mm" /></td>
@@ -168,7 +184,11 @@
                         </c:forEach>
                     </c:when>
                     <c:otherwise>
-                        <tr><td colspan="6" class="text-muted">暂无菜品</td></tr>
+                        <tr>
+                            <td colspan="${not empty editMenu ? 5 : 4}">
+                                <a class="btn btn-primary" href="${pageContext.request.contextPath}/admin/dishes?mode=new">去菜品页添加菜品</a>
+                            </td>
+                        </tr>
                     </c:otherwise>
                 </c:choose>
                 </tbody>

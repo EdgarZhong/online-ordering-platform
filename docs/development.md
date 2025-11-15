@@ -202,6 +202,24 @@ ER图已完成设计，逻辑设计与表结构设计将在~/database/schema.sql
 #### Sprint 3: 消费者核心流程 (11月7日 - 11月12日, 6天)
 *   **目标**: 实现消费者的主要订餐流程。
 *   **交付成果**: 消费者可以浏览餐厅列表，进入餐厅店铺，查看菜单，并成功下单。
+ 
+##### 规划详解（API+前端+事务）
+- 后端REST API（Servlet）：
+  - `GET /api/restaurants`、`GET /api/restaurants/{id}`：餐厅列表与详情
+  - `GET /api/restaurants/{id}/menus`、`GET /api/menus/{menuId}/items`：菜单与菜单项
+  - `POST /api/orders`、`GET /api/orders/{orderId}`：下单与订单状态
+  - 统一以`restaurant_id`过滤，所有写入在事务中完成
+- 前端Vue（SPA）：
+  - 路由：`/`、`/restaurants/:id`、`/checkout`、`/orders/:id`
+  - 组件：`RestaurantList`、`RestaurantDetail`、`MenuItemCard`、`CartDrawer`、`CheckoutForm`、`OrderStatus`
+  - 状态管理（Pinia/Vuex）：购物车以餐厅维度隔离，防止跨店混合
+- JDBC事务与校验：
+  - 创建`orders`后批量插入`order_items`；失败回滚；参数校验与跨租户拒绝
+- 里程碑：
+  - M1：只读API雏形
+  - M2：前端路由与购物车打通（模拟下单）
+  - M3：订单写入与状态查询
+  - 验收：从首页到下单闭环，数据严格按`restaurant_id`隔离
 
 #### Sprint 4: 订单闭环与整合 (11月13日 - 11月16日, 4天)
 *   **目标**: 完成订单处理流程，进行端到端测试，录制Demo视频并完成所有交付文档。
@@ -289,7 +307,7 @@ ER图已完成设计，逻辑设计与表结构设计将在~/database/schema.sql
 | 205 | US-16 | MenuServlet 与列表/创建/编辑/删除 JSP 页 | B/E | 待办 | 3 | | B 主程，E 提供样式 |
 | 206 | US-17 | 菜品管理 DAO 接口与实现（`dishes`，含 `image_url`） | B | 待办 | 2 | | 依赖 211 规范 |
 | 207 | US-17 | DishServlet 与列表/创建/编辑/删除 JSP 页 | B/E | 待办 | 3 | | 图片上传交互协作 |
-| 208 | US-16/17 | `menu_items` 绑定逻辑与唯一约束校验（同菜单不重复绑定同菜） | B | 待办 | 2 | | 约束与错误提示 |
+| 208 | US-16/17 | `menu_items` 绑定逻辑与重复绑定提示（软校验，可选） | B | 待办 | 2 | | 用户体验与提示 |
 | 209 | US-07/US-13 | 加强 AuthFilter 与会话上下文：在 `/admin/*` 下统一从 Session 传递 `restaurant_id` | C | 待办 | 2 | | 统一租户上下文 |
 | 210 | NFR/US-04/US-05 | 统一 JSP 布局与 Bootstrap 风格（`header.jsp`/`footer.jsp`/管理端导航） | E | 待办 | 2 | | 视图统一与复用 |
 | 211 | NFR | DAO 层基线与模板：DBUtil 用法、PreparedStatement 规范、异常处理与中文注释模板 | A | 待办 | 2 | | 后端地基与示例 |

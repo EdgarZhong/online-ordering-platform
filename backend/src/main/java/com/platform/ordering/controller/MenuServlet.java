@@ -2,7 +2,7 @@
  * @Author: EdgarZhong 18518713412@163.com
  * @Date: 2025-11-14 19:30:47
  * @LastEditors: EdgarZhong 18518713412@163.com
- * @LastEditTime: 2025-11-15 10:20:44
+ * @LastEditTime: 2025-11-15 11:58:21
  * @FilePath: \final\online-ordering-platform\backend\src\main\java\com\platform\ordering\controller\MenuServlet.java
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -224,8 +224,9 @@ public class MenuServlet extends HttpServlet {
                         upd.setInt(4, menuId);
                         upd.setInt(5, restaurantId);
                         upd.executeUpdate();
-                        del = conn.prepareStatement("DELETE FROM menu_items WHERE menu_id=?");
+                        del = conn.prepareStatement("DELETE FROM menu_items USING menus WHERE menu_items.menu_id=? AND menu_items.menu_id=menus.menu_id AND menus.restaurant_id=?");
                         del.setInt(1, menuId);
+                        del.setInt(2, restaurantId);
                         del.executeUpdate();
                         ins = conn.prepareStatement("INSERT INTO menu_items (menu_id, dish_id, price, quantity, sort_order) VALUES (?, ?, ?, ?, ?)");
                         java.util.List<com.platform.ordering.model.DraftMenuItem> toPersist;

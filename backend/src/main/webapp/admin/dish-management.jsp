@@ -21,7 +21,14 @@
             <h4>菜品列表</h4>
             <table class="table table-striped">
                 <thead>
-                <tr><th>名称</th><th>默认价格</th><th>图片</th><th>描述</th><th>创建日期</th><th>操作</th></tr>
+                <tr>
+                    <th class="text-nowrap">名称</th>
+                    <th class="text-nowrap">默认价格</th>
+                    <th class="text-nowrap">图片</th>
+                    <th class="text-nowrap">描述</th>
+                    <th class="text-nowrap">创建日期</th>
+                    <th class="text-nowrap">操作</th>
+                </tr>
                 </thead>
                 <tbody>
                 <c:choose>
@@ -33,7 +40,7 @@
                                 <td><c:if test="${not empty d.imageUrl}"><img src="${d.imageUrl}" style="height:40px"/></c:if></td>
                                 <td><c:out value="${d.description}"/></td>
                                 <td><fmt:formatDate value="${d.createdAt}" pattern="yyyy-MM-dd HH:mm" /></td>
-                                <td>
+                                <td class="text-nowrap">
                                     <a class="btn btn-sm btn-outline-secondary" href="${pageContext.request.contextPath}/admin/dishes?mode=edit&dishId=${d.dishId}">编辑</a>
                                     <form class="d-inline" method="post" action="${pageContext.request.contextPath}/admin/dishes">
                                         <input type="hidden" name="action" value="delete" />

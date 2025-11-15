@@ -2,7 +2,7 @@
  * @Author: EdgarZhong 18518713412@163.com
  * @Date: 2025-11-15 00:05:55
  * @LastEditors: EdgarZhong 18518713412@163.com
- * @LastEditTime: 2025-11-15 11:12:41
+ * @LastEditTime: 2025-11-15 11:20:16
  * @FilePath: \final\online-ordering-platform\backend\src\main\webapp\admin\menu-edit-panel.jsp
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 -->
@@ -37,7 +37,7 @@
     <c:if test="${true}">
             <table id="menu-items-table" class="table table-striped mt-3">
                 <thead>
-                <tr><th>序号</th><th>菜品名称</th><th>价格</th><th>数量</th><th>拖拽</th></tr>
+                <tr><th>序号</th><th>菜品名称</th><th>价格</th><th>数量</th><th>拖拽以排序</th></tr>
                 </thead>
                 <tbody>
                 <c:set var="draft" value="${sessionScope.menuDraft}" />
@@ -60,7 +60,7 @@
                                         <button class="btn btn-outline-secondary" type="button" onclick="adjustQty(this,1)">+</button>
                                     </div>
                                 </td>
-                                <td class="text-muted">☰</td>
+                                <td class="text-muted drag-handle">☰</td>
                             </tr>
                         </c:forEach>
                     </c:when>
@@ -85,7 +85,7 @@
                                         <button class="btn btn-outline-secondary" type="button" onclick="adjustQty(this,1)">+</button>
                                     </div>
                                         </td>
-                                        <td class="text-muted">☰</td>
+                                        <td class="text-muted drag-handle">☰</td>
                                     </tr>
                                 </c:forEach>
                             </c:when>
@@ -109,7 +109,10 @@
       if(!table||!form) return;
       var tbody=table.querySelector('tbody');
       var dragSrc;
-      tbody.addEventListener('dragstart',function(e){ var tr=e.target.closest('tr[draggable="true"]'); if(!tr) return; dragSrc=tr; e.dataTransfer.effectAllowed='move'; });
+      var allowRowDrag=false;
+      tbody.addEventListener('mousedown',function(e){ allowRowDrag=!!e.target.closest('.drag-handle'); });
+      tbody.addEventListener('dragstart',function(e){ var tr=e.target.closest('tr[draggable="true"]'); if(!tr) return; if(!allowRowDrag){ e.preventDefault(); return; } dragSrc=tr; e.dataTransfer.effectAllowed='move'; });
+      tbody.addEventListener('dragend',function(){ allowRowDrag=false; });
       tbody.addEventListener('dragover',function(e){ e.preventDefault(); });
       tbody.addEventListener('drop',function(e){ e.preventDefault(); var tr=e.target.closest('tr[draggable="true"]'); if(!tr||tr===dragSrc) return; var rect=tr.getBoundingClientRect(); var before=(e.clientY-rect.top)<rect.height/2; tbody.insertBefore(dragSrc, before? tr : tr.nextSibling); updateOrderInputs(); });
       function pruneZeroRows(){ var rows=tbody.querySelectorAll('tr[draggable="true"]'); rows.forEach(function(r){ var q=r.querySelector('input[name="quantity"]'); var v=parseInt((q&&q.value)||'0'); if(v<=0){ r.parentNode.removeChild(r); } }); }
