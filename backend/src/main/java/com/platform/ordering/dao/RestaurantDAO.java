@@ -32,4 +32,9 @@ public interface RestaurantDAO {
     int update(Restaurant restaurant) throws SQLException;
 
     int deleteById(int restaurantId) throws SQLException;
+
+    /**
+     * 列出所有餐厅（只读API用于首页展示）
+     */
+    java.util.List<com.platform.ordering.model.Restaurant> listAll() throws SQLException;
 }

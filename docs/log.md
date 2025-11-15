@@ -2,7 +2,29 @@
 
 ## 2025-11-15 - by 钟丞
 
-### 本次提交内容：菜品&菜单管理阶段总结（Sprint 2 迭代中）
+### 本次提交内容：Sprint 3 实现 GET API
+
+完成消费者端只读 API 的首批落地与部署测试页面，契约与文档对齐，支持在无前端情况下完成端到端验证。
+
+#### 新增/修改内容概览
+- API 实现（Servlet）：
+  - `GET /api/restaurants` 列表（`backend/src/main/java/com/platform/ordering/api/RestaurantsApiServlet.java`）
+  - `GET /api/restaurants/{id}` 详情（`backend/src/main/java/com/platform/ordering/api/RestaurantResourceApiServlet.java`）
+  - `GET /api/restaurants/{id}/menus` 菜单列表（同上）
+  - `GET /api/menus/{menuId}/items` 菜单项（返回 `dishId,name,imageUrl,description,price`，`backend/src/main/java/com/platform/ordering/api/MenusResourceApiServlet.java`）
+  - `GET /api/orders/{orderId}` 订单详情（需登录，会话鉴权，仅本人订单；`backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java`）
+- DAO 扩展：`RestaurantDAO.listAll()` 与实现（`backend/src/main/java/com/platform/ordering/dao/RestaurantDAO.java`, `RestaurantDAOImpl.java`）
+- 测试页面：`backend/src/main/webapp/test/api-tests.jsp`（按钮触发上述所有 GET 接口）
+- 文档对齐：完善 `docs/API.md`（认证与状态码、字段来源映射、curl 示例、事务与校验规则）
+
+#### 验证结果（以测试用户 testcustomer 登录）
+- 餐厅列表与详情、菜单列表、菜单项均返回预期 JSON；订单详情返回本人订单的菜品明细与总价。
+
+---
+
+## 2025-11-15 - by 钟丞
+
+### 本次提交内容：菜品&菜单管理阶段总结（Sprint 2 已完成）
 
 本次变更聚焦“菜单编辑拖拽排序保存丢失”的后端稳健化修复与交互统一，确保在最小改动前提下彻底解决问题，并进行少量安全与显示优化。
 
@@ -53,11 +75,6 @@
   - 进入编辑视图时从数据库现状构建 `DraftMenu` + `DraftMenuItem` 列表，便于前端编辑与顺序控制（`MenuServlet.java:47-69`）。
   - 保存时若前端未提供完整数组，回退使用草稿列表作为持久化数据源，保证编辑体验与数据完整性（`MenuServlet.java:175-176,248-251`）。
 
----
-### 后续工作（暂缓项）
-- 用“差异更新”替代“删除重建”，避免主键重建与潜在误删。
-- 在服务端进行重复 `dishId` 校验与友好错误提示。
-- `.gitattributes` 规范行尾策略，提升跨平台协作一致性。
 
 
 ## 2025-11-14 - by 钟丞

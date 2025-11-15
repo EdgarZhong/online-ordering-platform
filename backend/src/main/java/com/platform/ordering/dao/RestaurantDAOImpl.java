@@ -119,4 +119,31 @@ public class RestaurantDAOImpl implements RestaurantDAO {
             DBUtil.close(conn, pstmt, null);
         }
     }
+
+    @Override
+    public java.util.List<Restaurant> listAll() throws SQLException {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        String sql = "SELECT restaurant_id, name, address, phone, description, logo_url FROM restaurants ORDER BY restaurant_id ASC";
+        java.util.List<Restaurant> list = new java.util.ArrayList<>();
+        try {
+            conn = DBUtil.getConnection();
+            pstmt = conn.prepareStatement(sql);
+            rs = pstmt.executeQuery();
+            while (rs.next()) {
+                Restaurant r = new Restaurant();
+                r.setRestaurantId(rs.getInt("restaurant_id"));
+                r.setName(rs.getString("name"));
+                r.setAddress(rs.getString("address"));
+                r.setPhone(rs.getString("phone"));
+                r.setDescription(rs.getString("description"));
+                try { r.setLogoUrl(rs.getString("logo_url")); } catch (Exception ignored) {}
+                list.add(r);
+            }
+        } finally {
+            DBUtil.close(conn, pstmt, rs);
+        }
+        return list;
+    }
 }
