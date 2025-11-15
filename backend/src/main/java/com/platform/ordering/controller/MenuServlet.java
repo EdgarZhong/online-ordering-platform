@@ -2,7 +2,7 @@
  * @Author: EdgarZhong 18518713412@163.com
  * @Date: 2025-11-14 19:30:47
  * @LastEditors: EdgarZhong 18518713412@163.com
- * @LastEditTime: 2025-11-15 02:43:39
+ * @LastEditTime: 2025-11-15 10:20:44
  * @FilePath: \final\online-ordering-platform\backend\src\main\java\com\platform\ordering\controller\MenuServlet.java
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -154,23 +154,32 @@ public class MenuServlet extends HttpServlet {
                         if (keys.next()) {
                             menuId = keys.getInt(1);
                         }
-                        java.util.List<com.platform.ordering.model.DraftMenuItem> toPersist = new java.util.ArrayList<>();
-                        if (ids != null && dishIds != null) {
-                            for (int i = 0; i < ids.length; i++) {
-                                com.platform.ordering.model.DraftMenuItem di = new com.platform.ordering.model.DraftMenuItem();
-                                di.setDishId((dishIds != null && i < dishIds.length && dishIds[i] != null && !dishIds[i].isEmpty()) ? Integer.parseInt(dishIds[i]) : 0);
-                                di.setQuantity((qtys != null && i < qtys.length && qtys[i] != null && !qtys[i].isEmpty()) ? Integer.parseInt(qtys[i]) : 1);
-                                di.setPrice((prices != null && i < prices.length && prices[i] != null && !prices[i].isEmpty()) ? new java.math.BigDecimal(prices[i]) : java.math.BigDecimal.ZERO);
-                                di.setSortOrder((orders != null && i < orders.length && orders[i] != null && !orders[i].isEmpty()) ? Integer.parseInt(orders[i]) : i);
-                                toPersist.add(di);
-                            }
+                        java.util.List<com.platform.ordering.model.DraftMenuItem> toPersist;
+                        String rows = req.getParameter("rows");
+                        java.util.List<com.platform.ordering.model.DraftMenuItem> parsed = parseRowsPayload(rows);
+                        if (!parsed.isEmpty()) {
+                            toPersist = parsed;
                         } else {
-                            com.platform.ordering.model.DraftMenu draft = (com.platform.ordering.model.DraftMenu) req.getSession().getAttribute("menuDraft");
-                            if (draft != null && draft.getItems() != null) toPersist = draft.getItems();
+                            toPersist = new java.util.ArrayList<>();
+                            int rowCount = (orders != null && orders.length > 0) ? orders.length : ((dishIds != null) ? dishIds.length : 0);
+                            if (rowCount > 0) {
+                                for (int i = 0; i < rowCount; i++) {
+                                    com.platform.ordering.model.DraftMenuItem di = new com.platform.ordering.model.DraftMenuItem();
+                                    di.setDishId((dishIds != null && i < dishIds.length && dishIds[i] != null && !dishIds[i].isEmpty()) ? Integer.parseInt(dishIds[i]) : 0);
+                                    di.setQuantity((qtys != null && i < qtys.length && qtys[i] != null && !qtys[i].isEmpty()) ? Integer.parseInt(qtys[i]) : 1);
+                                    di.setPrice((prices != null && i < prices.length && prices[i] != null && !prices[i].isEmpty()) ? new java.math.BigDecimal(prices[i]) : java.math.BigDecimal.ZERO);
+                                    di.setSortOrder((orders != null && i < orders.length && orders[i] != null && !orders[i].isEmpty()) ? Integer.parseInt(orders[i]) : i);
+                                    if (di.getDishId() > 0 && di.getQuantity() > 0) toPersist.add(di);
+                                }
+                            } else {
+                                com.platform.ordering.model.DraftMenu draft = (com.platform.ordering.model.DraftMenu) req.getSession().getAttribute("menuDraft");
+                                toPersist = (draft != null && draft.getItems() != null) ? draft.getItems() : toPersist;
+                            }
                         }
                         psItemIns = conn.prepareStatement(sql_insertItem);
                         for (int i = 0; i < toPersist.size(); i++) {
                             com.platform.ordering.model.DraftMenuItem di = toPersist.get(i);
+                            if (di.getQuantity() <= 0) continue;
                             psItemIns.setInt(1, menuId);
                             psItemIns.setInt(2, di.getDishId());
                             psItemIns.setBigDecimal(3, di.getPrice());
@@ -219,21 +228,30 @@ public class MenuServlet extends HttpServlet {
                         del.setInt(1, menuId);
                         del.executeUpdate();
                         ins = conn.prepareStatement("INSERT INTO menu_items (menu_id, dish_id, price, quantity, sort_order) VALUES (?, ?, ?, ?, ?)");
-                        java.util.List<com.platform.ordering.model.DraftMenuItem> toPersist = new java.util.ArrayList<>();
-                        if (ids != null && dishIds != null) {
-                            for (int i = 0; i < ids.length; i++) {
-                                com.platform.ordering.model.DraftMenuItem di = new com.platform.ordering.model.DraftMenuItem();
-                                di.setDishId((dishIds != null && i < dishIds.length && dishIds[i] != null && !dishIds[i].isEmpty()) ? Integer.parseInt(dishIds[i]) : 0);
-                                di.setQuantity((qtys != null && i < qtys.length && qtys[i] != null && !qtys[i].isEmpty()) ? Integer.parseInt(qtys[i]) : 1);
-                                di.setPrice((prices != null && i < prices.length && prices[i] != null && !prices[i].isEmpty()) ? new java.math.BigDecimal(prices[i]) : java.math.BigDecimal.ZERO);
-                                di.setSortOrder((orders != null && i < orders.length && orders[i] != null && !orders[i].isEmpty()) ? Integer.parseInt(orders[i]) : i);
-                                toPersist.add(di);
+                        java.util.List<com.platform.ordering.model.DraftMenuItem> toPersist;
+                        String rows2 = req.getParameter("rows");
+                        java.util.List<com.platform.ordering.model.DraftMenuItem> parsed2 = parseRowsPayload(rows2);
+                        if (!parsed2.isEmpty()) {
+                            toPersist = parsed2;
+                        } else {
+                            toPersist = new java.util.ArrayList<>();
+                            int rowCount2 = (orders != null && orders.length > 0) ? orders.length : ((dishIds != null) ? dishIds.length : 0);
+                            if (rowCount2 > 0) {
+                                for (int i = 0; i < rowCount2; i++) {
+                                    com.platform.ordering.model.DraftMenuItem di = new com.platform.ordering.model.DraftMenuItem();
+                                    di.setDishId((dishIds != null && i < dishIds.length && dishIds[i] != null && !dishIds[i].isEmpty()) ? Integer.parseInt(dishIds[i]) : 0);
+                                    di.setQuantity((qtys != null && i < qtys.length && qtys[i] != null && !qtys[i].isEmpty()) ? Integer.parseInt(qtys[i]) : 1);
+                                    di.setPrice((prices != null && i < prices.length && prices[i] != null && !prices[i].isEmpty()) ? new java.math.BigDecimal(prices[i]) : java.math.BigDecimal.ZERO);
+                                    di.setSortOrder((orders != null && i < orders.length && orders[i] != null && !orders[i].isEmpty()) ? Integer.parseInt(orders[i]) : i);
+                                    if (di.getDishId() > 0 && di.getQuantity() > 0) toPersist.add(di);
+                                }
+                            } else if (draft != null && draft.getItems() != null) {
+                                toPersist = draft.getItems();
                             }
-                        } else if (draft != null && draft.getItems() != null) {
-                            toPersist = draft.getItems();
                         }
                         for (int i = 0; i < toPersist.size(); i++) {
                             com.platform.ordering.model.DraftMenuItem di = toPersist.get(i);
+                            if (di.getQuantity() <= 0) continue;
                             ins.setInt(1, menuId);
                             ins.setInt(2, di.getDishId());
                             ins.setBigDecimal(3, di.getPrice());
@@ -350,5 +368,41 @@ public class MenuServlet extends HttpServlet {
         } catch (SQLException e) {
             resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private java.util.List<com.platform.ordering.model.DraftMenuItem> parseRowsPayload(String rows) {
+        java.util.List<com.platform.ordering.model.DraftMenuItem> result = new java.util.ArrayList<>();
+        if (rows == null || rows.trim().isEmpty()) return result;
+        String[] parts = rows.split(";");
+        for (int i = 0; i < parts.length; i++) {
+            String p = parts[i].trim();
+            if (p.isEmpty()) continue;
+            String[] fields = p.split(":");
+            int dishId = 0;
+            java.math.BigDecimal price = java.math.BigDecimal.ZERO;
+            int qty = 1;
+            int idx = i;
+            if (fields.length > 0) {
+                try { dishId = Integer.parseInt(fields[0].trim()); } catch (Exception ignored) {}
+            }
+            if (fields.length > 1) {
+                try { price = new java.math.BigDecimal(fields[1].trim()); } catch (Exception ignored) {}
+            }
+            if (fields.length > 2) {
+                try { qty = Integer.parseInt(fields[2].trim()); } catch (Exception ignored) {}
+            }
+            if (fields.length > 3) {
+                try { idx = Integer.parseInt(fields[3].trim()); } catch (Exception ignored) {}
+            }
+            if (dishId > 0 && qty > 0) {
+                com.platform.ordering.model.DraftMenuItem di = new com.platform.ordering.model.DraftMenuItem();
+                di.setDishId(dishId);
+                di.setPrice(price);
+                di.setQuantity(qty);
+                di.setSortOrder(idx);
+                result.add(di);
+            }
+        }
+        return result;
     }
 }
