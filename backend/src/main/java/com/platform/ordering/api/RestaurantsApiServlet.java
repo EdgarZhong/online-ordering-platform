@@ -20,6 +20,9 @@ public class RestaurantsApiServlet extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         resp.setCharacterEncoding("UTF-8");
         resp.setContentType("application/json;charset=UTF-8");
+        resp.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        resp.setHeader("Pragma", "no-cache");
+        resp.setDateHeader("Expires", 0);
 
         PrintWriter out = resp.getWriter();
         try {

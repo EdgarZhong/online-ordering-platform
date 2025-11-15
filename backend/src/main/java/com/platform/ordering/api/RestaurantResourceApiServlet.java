@@ -22,6 +22,9 @@ public class RestaurantResourceApiServlet extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         resp.setCharacterEncoding("UTF-8");
         resp.setContentType("application/json;charset=UTF-8");
+        resp.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        resp.setHeader("Pragma", "no-cache");
+        resp.setDateHeader("Expires", 0);
 
         String path = req.getPathInfo();
         PrintWriter out = resp.getWriter();
@@ -69,7 +72,8 @@ public class RestaurantResourceApiServlet extends HttpServlet {
                     sb.append('{')
                             .append("\"menuId\":").append(m.getMenuId()).append(',')
                             .append("\"name\":\"").append(escape(m.getName())).append('\"').append(',')
-                            .append("\"description\":\"").append(escape(m.getDescription())).append('\"')
+                            .append("\"description\":\"").append(escape(m.getDescription())).append('\"').append(',')
+                            .append("\"isPackage\":").append(m.isPackage())
                             .append('}');
                 }
                 sb.append(']');

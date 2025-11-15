@@ -1,13 +1,11 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" pageEncoding="UTF-8" %>
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
-<jsp:include page="/admin/header.jsp" />
-
 <div class="container mt-5">
     <div class="row justify-content-center">
         <div class="col-md-5">
             <div class="card">
                 <div class="card-header">
-                    <h3>系统登录</h3>
+                    <h3>统一登录</h3>
                 </div>
                 <div class="card-body">
                     <!-- 显示提示信息 -->
@@ -33,6 +31,7 @@
                             <label for="password" class="form-label">密码</label>
                             <input type="password" class="form-control" id="password" name="password" required>
                         </div>
+                        <input type="hidden" name="redirect" value="${param.redirect}" />
                         <button type="submit" class="btn btn-primary w-100">登录</button>
                     </form>
                 </div>
@@ -46,5 +45,3 @@
         </div>
     </div>
 </div>
-
-<jsp:include page="/admin/footer.jsp" />

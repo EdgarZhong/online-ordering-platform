@@ -34,6 +34,10 @@ SELECT restaurant_id, 'merchant2', '123123', 'merchant', '13900139002' FROM new_
 INSERT INTO users (username, password, role, phone)
 VALUES ('testcustomer', '123123', 'customer', '13700137003');
 
+-- 消费者 2: testcustomer2 (ID=4)
+INSERT INTO users (username, password, role, phone)
+VALUES ('testcustomer2', '123123', 'customer', '13700137004');
+
 -- ====================================================================
 -- 菜品库 (Dishes - Raw Materials)
 -- ====================================================================
@@ -62,6 +66,9 @@ INSERT INTO menus (restaurant_id, name, description)
 VALUES
     (1, '招牌单点', '本店所有招牌菜品均可在此单点'), -- menu_id=1
     (1, '工作日午市套餐', '牛肉面+可乐，实惠之选');    -- menu_id=2
+
+-- 将“工作日午市套餐”标记为套餐类型
+UPDATE menus SET is_package = TRUE WHERE menu_id = 2 AND restaurant_id = 1;
 
 -- 为餐厅 1 的菜单添加菜品和价格
 INSERT INTO menu_items (menu_id, dish_id, price)
@@ -98,7 +105,33 @@ INSERT INTO orders (user_id, restaurant_id, total_price, status)
 VALUES (3, 1, 34.00, 'COMPLETED'); -- order_id=1
 
 -- 订单项
-INSERT INTO order_items (order_id, dish_id, quantity, unit_price)
+INSERT INTO order_items (order_id, dish_id, quantity, unit_price, menu_id)
 VALUES
-    (1, 1, 1, 30.00), -- 1份牛肉面，下单时快照单价为套餐价30.00
-    (1, 4, 1, 4.00);  -- 1份可乐，下单时快照单价为套餐价4.00
+    (1, 1, 1, 30.00, 2), -- 1份牛肉面，下单时快照单价为套餐价30.00（menu_id=2 工作日午市套餐）
+    (1, 4, 1, 4.00, 2);  -- 1份可乐，下单时快照单价为套餐价4.00（menu_id=2 工作日午市套餐）
+
+-- 订单B：餐厅1，用户 testcustomer2，状态 PENDING，总价 62.00
+INSERT INTO orders (user_id, restaurant_id, total_price, status)
+VALUES (4, 1, 62.00, 'PENDING'); -- order_id=2
+
+INSERT INTO order_items (order_id, dish_id, quantity, unit_price, menu_id)
+VALUES
+    (2, 1, 1, 32.00, 1),
+    (2, 3, 2, 15.00, 1);
+
+-- 订单C：餐厅2，用户 testcustomer，状态 COMPLETED，总价 47.00
+INSERT INTO orders (user_id, restaurant_id, total_price, status)
+VALUES (3, 2, 47.00, 'COMPLETED'); -- order_id=3
+
+INSERT INTO order_items (order_id, dish_id, quantity, unit_price, menu_id)
+VALUES
+    (3, 6, 1, 25.00, 3),
+    (3, 7, 1, 22.00, 3);
+
+-- 订单D：餐厅1，用户 testcustomer，状态 CANCELLED，总价 30.00
+INSERT INTO orders (user_id, restaurant_id, total_price, status)
+VALUES (3, 1, 30.00, 'CANCELLED'); -- order_id=4
+
+INSERT INTO order_items (order_id, dish_id, quantity, unit_price, menu_id)
+VALUES
+    (4, 1, 1, 30.00, 2);

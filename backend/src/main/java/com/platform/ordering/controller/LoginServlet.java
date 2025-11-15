@@ -22,6 +22,8 @@ public class LoginServlet extends HttpServlet {
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String username = req.getParameter("username");
         String password = req.getParameter("password");
+        String redirect = req.getParameter("redirect");
+        String consumerDefaultRedirect = getServletContext().getInitParameter("consumerDefaultRedirect");
 
         try {
             User user = userDAO.findByUsername(username);
@@ -35,12 +37,27 @@ public class LoginServlet extends HttpServlet {
                 session.setAttribute("user", user);
 
                 // 3. 根据角色重定向到不同页面
+                if (redirect != null && !redirect.isEmpty()) {
+                    boolean allowed = false;
+                    if (consumerDefaultRedirect != null && redirect.startsWith(consumerDefaultRedirect)) {
+                        allowed = true;
+                    }
+                    if (redirect.startsWith(req.getContextPath() + "/")) {
+                        allowed = true;
+                    }
+                    if (allowed) {
+                        resp.sendRedirect(redirect);
+                        return;
+                    }
+                }
                 if ("merchant".equals(user.getRole()) || "superadmin".equals(user.getRole())) {
-                    // 商户或超级管理员跳转到后台仪表盘
                     resp.sendRedirect(req.getContextPath() + "/admin/dashboard.jsp");
                 } else {
-                    // 消费者跳转到前端首页 (此处暂定为项目根路径)
-                    resp.sendRedirect(req.getContextPath() + "/");
+                    if (consumerDefaultRedirect != null && !consumerDefaultRedirect.isEmpty()) {
+                        resp.sendRedirect(consumerDefaultRedirect);
+                    } else {
+                        resp.sendRedirect(req.getContextPath() + "/");
+                    }
                 }
             } else {
                 // 登录失败，重定向回登录页并附带错误提示

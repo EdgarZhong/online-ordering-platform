@@ -88,7 +88,7 @@
 
             <c:if test="${not empty editDish}">
                 <h4>编辑菜品</h4>
-                <form method="post" action="${pageContext.request.contextPath}/admin/dishes">
+                <form id="editDishForm" method="post" action="${pageContext.request.contextPath}/admin/dishes">
                     <input type="hidden" name="action" value="update" />
                     <input type="hidden" name="dishId" value="${editDish.dishId}" />
                     <div class="mb-2">
@@ -110,6 +110,22 @@
                     <button type="submit" class="btn btn-primary">确认修改</button>
                     <a class="btn btn-secondary" href="${pageContext.request.contextPath}/admin/dishes">取消修改</a>
                 </form>
+                <script>
+                  document.addEventListener('DOMContentLoaded', function(){
+                    var form = document.getElementById('editDishForm')
+                    if (!form) return
+                    var priceInput = form.querySelector('input[name="defaultPrice"]')
+                    if (!priceInput) return
+                    var original = parseFloat(priceInput.value)
+                    form.addEventListener('submit', function(e){
+                      var current = parseFloat(priceInput.value)
+                      if (!isNaN(original) && !isNaN(current) && current !== original) {
+                        var ok = window.confirm('您正在修改菜品默认价格，菜单中的菜品价格将不会更改。\n如果您希望修改菜单中的菜品实际价格，请前往菜单管理修改。')
+                        if (!ok) { e.preventDefault() }
+                      }
+                    })
+                  })
+                </script>
             </c:if>
         </div>
     </div>

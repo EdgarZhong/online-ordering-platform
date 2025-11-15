@@ -32,16 +32,50 @@ public class OrdersResourceApiServlet extends HttpServlet {
 
         PrintWriter out = resp.getWriter();
         String path = req.getPathInfo();
-        if (path == null || path.equals("/")) {
-            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            out.write("{\"error\":\"Bad request\"}");
-            return;
-        }
-
         User user = (User) req.getSession().getAttribute("user");
         if (user == null || user.getUserId() <= 0) {
             resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             out.write("{\"error\":\"Unauthorized\"}");
+            return;
+        }
+        if (path == null || path.equals("/")) {
+            try {
+                java.util.List<Order> orders = fetchOrdersForUser(user.getUserId());
+                StringBuilder sb = new StringBuilder();
+                sb.append('[');
+                for (int oi = 0; oi < orders.size(); oi++) {
+                    Order o = orders.get(oi);
+                    if (oi > 0) sb.append(',');
+                    String restaurantName = fetchRestaurantName(o.getRestaurantId());
+                    sb.append('{')
+                            .append("\"orderId\":").append(o.getOrderId()).append(',')
+                            .append("\"restaurantName\":\"").append(escape(restaurantName)).append('\"').append(',')
+                            .append("\"status\":\"").append(escape(o.getStatus())).append('\"').append(',')
+                            .append("\"totalPrice\":").append(o.getTotalPrice()).append(',')
+                            .append("\"createdAt\":\"").append(o.getCreatedAt() == null ? "" : o.getCreatedAt().toString()).append('\"').append(',')
+                            .append("\"items\":");
+                    sb.append('[');
+                    java.util.List<OrderItem> items = o.getItems();
+                    for (int i = 0; i < items.size(); i++) {
+                        OrderItem it = items.get(i);
+                        if (i > 0) sb.append(',');
+                        sb.append('{')
+                                .append("\"dishName\":\"").append(escape(it.getDishName())).append('\"').append(',')
+                                .append("\"menuId\":").append(it.getMenuId()).append(',')
+                                .append("\"menuName\":\"").append(escape(it.getMenuName())).append('\"').append(',')
+                                .append("\"quantity\":").append(it.getQuantity()).append(',')
+                                .append("\"unitPrice\":").append(it.getUnitPrice())
+                                .append('}');
+                    }
+                    sb.append(']');
+                    sb.append('}');
+                }
+                sb.append(']');
+                out.write(sb.toString());
+            } catch (SQLException e) {
+                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                out.write("{\"error\":\"Internal server error\"}");
+            }
             return;
         }
 
@@ -60,6 +94,50 @@ public class OrdersResourceApiServlet extends HttpServlet {
                 return;
             }
             String restaurantName = fetchRestaurantName(order.getRestaurantId());
+            java.util.Map<Integer, java.util.List<OrderItem>> byMenu = new java.util.HashMap<>();
+            for (OrderItem it : order.getItems()) {
+                byMenu.computeIfAbsent(it.getMenuId(), k -> new java.util.ArrayList<>()).add(it);
+            }
+            java.util.Map<Integer, Boolean> menuPackageMap = new java.util.HashMap<>();
+            java.util.Map<Integer, String> menuNameMap = new java.util.HashMap<>();
+            java.util.Map<String, Integer> defaultQtyMap = new java.util.HashMap<>();
+            Connection conn2 = null; PreparedStatement ps2 = null; ResultSet rs2 = null;
+            try {
+                conn2 = DBUtil.getConnection();
+                if (!byMenu.isEmpty()) {
+                    StringBuilder in = new StringBuilder();
+                    java.util.List<Integer> mids = new java.util.ArrayList<>(byMenu.keySet());
+                    for (int i = 0; i < mids.size(); i++) { if (i > 0) in.append(','); in.append('?'); }
+                    ps2 = conn2.prepareStatement("SELECT menu_id, name, is_package FROM menus WHERE menu_id IN (" + in + ")");
+                    for (int i = 0; i < mids.size(); i++) ps2.setInt(i + 1, mids.get(i));
+                    rs2 = ps2.executeQuery();
+                    while (rs2.next()) {
+                        int mid = rs2.getInt(1);
+                        menuNameMap.put(mid, rs2.getString(2));
+                        try { menuPackageMap.put(mid, rs2.getBoolean(3)); } catch (Exception ignored) { menuPackageMap.put(mid, false); }
+                    }
+                    if (rs2 != null) { try { rs2.close(); } catch (SQLException ignored) {} }
+                    if (ps2 != null) { try { ps2.close(); } catch (SQLException ignored) {} }
+                    StringBuilder in2 = new StringBuilder();
+                    for (int i = 0; i < mids.size(); i++) { if (i > 0) in2.append(','); in2.append('?'); }
+                    ps2 = conn2.prepareStatement("SELECT menu_id, dish_id, quantity, sort_order FROM menu_items WHERE menu_id IN (" + in2 + ")");
+                    for (int i = 0; i < mids.size(); i++) ps2.setInt(i + 1, mids.get(i));
+                    rs2 = ps2.executeQuery();
+                    while (rs2.next()) {
+                        int mid = rs2.getInt(1);
+                        int did = rs2.getInt(2);
+                        int dq = rs2.getInt(3);
+                        int so = rs2.getInt(4);
+                        defaultQtyMap.put(mid + ":" + did, dq);
+                        // store sort order alongside default quantity
+                        defaultQtyMap.put(mid + ":" + did + ":so", so);
+                    }
+                }
+            } catch (SQLException ignored) {
+            } finally {
+                DBUtil.close(conn2, ps2, rs2);
+            }
+
             StringBuilder sb = new StringBuilder();
             sb.append('{')
                     .append("\"orderId\":").append(order.getOrderId()).append(',')
@@ -69,15 +147,79 @@ public class OrdersResourceApiServlet extends HttpServlet {
                     .append("\"createdAt\":\"").append(order.getCreatedAt() == null ? "" : order.getCreatedAt().toString()).append('\"').append(',')
                     .append("\"items\":");
             sb.append('[');
-            List<OrderItem> items = order.getItems();
+            java.util.List<OrderItem> items = order.getItems();
             for (int i = 0; i < items.size(); i++) {
                 OrderItem it = items.get(i);
                 if (i > 0) sb.append(',');
                 sb.append('{')
                         .append("\"dishName\":\"").append(escape(it.getDishName())).append('\"').append(',')
+                        .append("\"menuId\":").append(it.getMenuId()).append(',')
+                        .append("\"menuName\":\"").append(escape(it.getMenuName())).append('\"').append(',')
                         .append("\"quantity\":").append(it.getQuantity()).append(',')
                         .append("\"unitPrice\":").append(it.getUnitPrice())
                         .append('}');
+            }
+            sb.append(']');
+            sb.append(',');
+            sb.append("\"menus\":");
+            sb.append('[');
+            int mi = 0;
+            for (java.util.Map.Entry<Integer, java.util.List<OrderItem>> e : byMenu.entrySet()) {
+                int mid = e.getKey();
+                java.util.List<OrderItem> list = e.getValue();
+                if (mi++ > 0) sb.append(',');
+                boolean isPkg = menuPackageMap.getOrDefault(mid, false);
+                int menuQty = 0;
+                if (isPkg && !list.isEmpty()) {
+                    OrderItem first = list.get(0);
+                    Integer dq = defaultQtyMap.get(mid + ":" + first.getDishId());
+                    if (dq != null && dq > 0) menuQty = first.getQuantity() / dq;
+                }
+                java.math.BigDecimal menuTotal = java.math.BigDecimal.ZERO;
+                java.math.BigDecimal menuUnitPrice = java.math.BigDecimal.ZERO;
+                for (OrderItem it : list) {
+                    menuTotal = menuTotal.add(it.getUnitPrice().multiply(new java.math.BigDecimal(it.getQuantity())));
+                }
+                if (isPkg) {
+                    java.math.BigDecimal unitSum = java.math.BigDecimal.ZERO;
+                    for (OrderItem it : list) {
+                        Integer dq = defaultQtyMap.get(mid + ":" + it.getDishId());
+                        int perQty = dq == null ? 0 : dq;
+                        unitSum = unitSum.add(it.getUnitPrice().multiply(new java.math.BigDecimal(perQty)));
+                    }
+                    menuUnitPrice = unitSum;
+                }
+                sb.append('{')
+                        .append("\"menuId\":").append(mid).append(',')
+                        .append("\"menuName\":\"").append(escape(menuNameMap.getOrDefault(mid, ""))).append('\"').append(',')
+                        .append("\"isPackage\":").append(isPkg).append(',')
+                        .append("\"menuQuantity\":").append(menuQty).append(',')
+                        .append("\"menuTotalPrice\":").append(menuTotal).append(',')
+                        .append("\"menuUnitPrice\":").append(menuUnitPrice).append(',')
+                        .append("\"items\":");
+                // sort items by sort_order when available
+                java.util.List<OrderItem> sorted = new java.util.ArrayList<>(list);
+                sorted.sort((a,b)->{
+                    Integer sa = defaultQtyMap.get(mid + ":" + a.getDishId() + ":so");
+                    Integer sb2 = defaultQtyMap.get(mid + ":" + b.getDishId() + ":so");
+                    return Integer.compare(sa == null ? 0 : sa, sb2 == null ? 0 : sb2);
+                });
+                sb.append('[');
+                for (int j = 0; j < sorted.size(); j++) {
+                    OrderItem it = sorted.get(j);
+                    if (j > 0) sb.append(',');
+                    Integer dq = defaultQtyMap.get(mid + ":" + it.getDishId());
+                    Integer so = defaultQtyMap.get(mid + ":" + it.getDishId() + ":so");
+                    sb.append('{')
+                            .append("\"dishName\":\"").append(escape(it.getDishName())).append('\"').append(',')
+                            .append("\"unitPrice\":").append(it.getUnitPrice()).append(',')
+                            .append("\"quantity\":").append(it.getQuantity()).append(',')
+                            .append("\"perPackageQuantity\":").append(dq == null ? 0 : dq).append(',')
+                            .append("\"sortOrder\":").append(so == null ? 0 : so)
+                            .append('}');
+                }
+                sb.append(']');
+                sb.append('}');
             }
             sb.append(']');
             sb.append('}');
@@ -130,19 +272,12 @@ public class OrdersResourceApiServlet extends HttpServlet {
             out.write("{\"error\":\"Invalid JSON\"}");
             return;
         }
-        if (orderReq == null || orderReq.restaurantId == null || orderReq.items == null || orderReq.items.isEmpty()) {
+        if (orderReq == null || orderReq.restaurantId == null || orderReq.menus == null || orderReq.menus.isEmpty()) {
             resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            out.write("{\"error\":\"Missing restaurantId or items\"}");
+            out.write("{\"error\":\"Missing restaurantId or menus\"}");
             return;
         }
         int restaurantId = orderReq.restaurantId;
-        for (OrderItemReq it : orderReq.items) {
-            if (it == null || it.dishId == null || it.quantity == null || it.quantity <= 0) {
-                resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                out.write("{\"error\":\"Invalid item\"}");
-                return;
-            }
-        }
 
         Connection conn = null;
         PreparedStatement priceStmt = null;
@@ -155,25 +290,78 @@ public class OrdersResourceApiServlet extends HttpServlet {
             conn.setAutoCommit(false);
 
             java.math.BigDecimal total = java.math.BigDecimal.ZERO;
-            java.util.Map<Integer, java.math.BigDecimal> unitPriceMap = new java.util.HashMap<>();
             priceStmt = conn.prepareStatement(
-                    "SELECT MIN(mi.price) AS price FROM menu_items mi " +
-                            "JOIN menus m ON mi.menu_id = m.menu_id " +
-                            "WHERE m.restaurant_id = ? AND mi.dish_id = ?");
-            for (OrderItemReq it : orderReq.items) {
-                priceStmt.setInt(1, restaurantId);
-                priceStmt.setInt(2, it.dishId);
-                rs = priceStmt.executeQuery();
-                if (!rs.next() || rs.getBigDecimal(1) == null) {
+                    "SELECT mi.price, mi.sort_order, mi.quantity FROM menu_items mi JOIN menus m ON mi.menu_id = m.menu_id WHERE m.restaurant_id = ? AND mi.menu_id = ? AND mi.dish_id = ?");
+
+            for (MenuReq mreq : orderReq.menus) {
+                if (mreq == null || mreq.menuId == null || mreq.quantity == null || mreq.quantity < 0 || mreq.items == null) {
                     conn.rollback();
                     resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                    out.write("{\"error\":\"Invalid items in the order. All items must belong to the same restaurant and be available.\"}");
+                    out.write("{\"error\":\"Invalid menu payload\"}");
                     return;
                 }
-                java.math.BigDecimal unitPrice = rs.getBigDecimal(1);
-                unitPriceMap.put(it.dishId, unitPrice);
-                total = total.add(unitPrice.multiply(new java.math.BigDecimal(it.quantity)));
-                if (rs != null) { try { rs.close(); } catch (SQLException ignored) {} }
+                boolean isPackage = isPackageMenu(conn, mreq.menuId, restaurantId);
+                if (isPackage) {
+                    java.util.List<MenuItemSnapshot> dbItems = fetchMenuItemsSnapshot(conn, mreq.menuId);
+                    if (dbItems.size() != mreq.items.size()) {
+                        conn.rollback();
+                        resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                        out.write("{\"error\":\"套餐" + mreq.menuId + "不匹配\"}");
+                        return;
+                    }
+                    for (int i = 0; i < dbItems.size(); i++) {
+                        MenuItemSnapshot dbi = dbItems.get(i);
+                        ItemReq cli = mreq.items.get(i);
+                        if (cli == null || cli.dishId == null || cli.sortOrder == null || cli.quantity == null) {
+                            conn.rollback();
+                            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                            out.write("{\"error\":\"套餐" + mreq.menuId + "不匹配\"}");
+                            return;
+                        }
+                        if (dbi.dishId != cli.dishId || dbi.sortOrder != cli.sortOrder || dbi.quantity != cli.quantity) {
+                            conn.rollback();
+                            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                            out.write("{\"error\":\"套餐" + mreq.menuId + "不匹配\"}");
+                            return;
+                        }
+                        priceStmt.setInt(1, restaurantId);
+                        priceStmt.setInt(2, mreq.menuId);
+                        priceStmt.setInt(3, cli.dishId);
+                        rs = priceStmt.executeQuery();
+                        if (!rs.next()) {
+                            conn.rollback();
+                            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                            out.write("{\"error\":\"Invalid items: menuId+dishId not available under restaurant\"}");
+                            return;
+                        }
+                        java.math.BigDecimal unitPrice = rs.getBigDecimal("price");
+                        int finalQty = dbi.quantity * mreq.quantity;
+                        total = total.add(unitPrice.multiply(new java.math.BigDecimal(finalQty)));
+                        if (rs != null) { try { rs.close(); } catch (SQLException ignored) {} }
+                    }
+                } else {
+                    for (ItemReq cli : mreq.items) {
+                        if (cli == null || cli.dishId == null || cli.quantity == null || cli.quantity <= 0) {
+                            conn.rollback();
+                            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                            out.write("{\"error\":\"Invalid items: quantity required\"}");
+                            return;
+                        }
+                        priceStmt.setInt(1, restaurantId);
+                        priceStmt.setInt(2, mreq.menuId);
+                        priceStmt.setInt(3, cli.dishId);
+                        rs = priceStmt.executeQuery();
+                        if (!rs.next()) {
+                            conn.rollback();
+                            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                            out.write("{\"error\":\"Invalid items: menuId+dishId not available under restaurant\"}");
+                            return;
+                        }
+                        java.math.BigDecimal unitPrice = rs.getBigDecimal("price");
+                        total = total.add(unitPrice.multiply(new java.math.BigDecimal(cli.quantity)));
+                        if (rs != null) { try { rs.close(); } catch (SQLException ignored) {} }
+                    }
+                }
             }
 
             insertOrderStmt = conn.prepareStatement(
@@ -188,13 +376,32 @@ public class OrdersResourceApiServlet extends HttpServlet {
             if (rs != null) { try { rs.close(); } catch (SQLException ignored) {} }
 
             insertItemStmt = conn.prepareStatement(
-                    "INSERT INTO order_items (order_id, dish_id, quantity, unit_price) VALUES (?, ?, ?, ?)");
-            for (OrderItemReq it : orderReq.items) {
-                insertItemStmt.setInt(1, orderId);
-                insertItemStmt.setInt(2, it.dishId);
-                insertItemStmt.setInt(3, it.quantity);
-                insertItemStmt.setBigDecimal(4, unitPriceMap.get(it.dishId));
-                insertItemStmt.addBatch();
+                    "INSERT INTO order_items (order_id, menu_id, dish_id, quantity, unit_price) VALUES (?, ?, ?, ?, ?)"
+            );
+            for (MenuReq mreq : orderReq.menus) {
+                boolean isPackage = isPackageMenu(conn, mreq.menuId, restaurantId);
+                if (isPackage) {
+                    java.util.List<MenuItemSnapshot> dbItems = fetchMenuItemsSnapshot(conn, mreq.menuId);
+                    for (MenuItemSnapshot dbi : dbItems) {
+                        insertItemStmt.setInt(1, orderId);
+                        insertItemStmt.setInt(2, mreq.menuId);
+                        insertItemStmt.setInt(3, dbi.dishId);
+                        insertItemStmt.setInt(4, dbi.quantity * mreq.quantity);
+                        java.math.BigDecimal unitPrice = fetchUnitPrice(conn, restaurantId, mreq.menuId, dbi.dishId);
+                        insertItemStmt.setBigDecimal(5, unitPrice);
+                        insertItemStmt.addBatch();
+                    }
+                } else {
+                    for (ItemReq cli : mreq.items) {
+                        insertItemStmt.setInt(1, orderId);
+                        insertItemStmt.setInt(2, mreq.menuId);
+                        insertItemStmt.setInt(3, cli.dishId);
+                        insertItemStmt.setInt(4, cli.quantity);
+                        java.math.BigDecimal unitPrice = fetchUnitPrice(conn, restaurantId, mreq.menuId, cli.dishId);
+                        insertItemStmt.setBigDecimal(5, unitPrice);
+                        insertItemStmt.addBatch();
+                    }
+                }
             }
             insertItemStmt.executeBatch();
 
@@ -225,10 +432,16 @@ public class OrdersResourceApiServlet extends HttpServlet {
 
     static class OrderReq {
         @SerializedName("restaurantId") Integer restaurantId;
-        @SerializedName("items") java.util.List<OrderItemReq> items;
+        @SerializedName("menus") java.util.List<MenuReq> menus;
     }
-    static class OrderItemReq {
+    static class MenuReq {
+        @SerializedName("menuId") Integer menuId;
+        @SerializedName("quantity") Integer quantity;
+        @SerializedName("items") java.util.List<ItemReq> items;
+    }
+    static class ItemReq {
         @SerializedName("dishId") Integer dishId;
+        @SerializedName("sortOrder") Integer sortOrder;
         @SerializedName("quantity") Integer quantity;
     }
 
@@ -253,7 +466,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
             order.setStatus(ors.getString("status"));
             try { order.setCreatedAt(ors.getTimestamp("order_time")); } catch (Exception ignored) {}
 
-            istmt = conn.prepareStatement("SELECT oi.item_id, oi.order_id, oi.dish_id, oi.quantity, oi.unit_price, d.name AS dish_name FROM order_items oi JOIN dishes d ON oi.dish_id = d.dish_id WHERE oi.order_id = ? ORDER BY oi.item_id");
+            istmt = conn.prepareStatement("SELECT oi.item_id, oi.order_id, oi.menu_id, oi.dish_id, oi.quantity, oi.unit_price, d.name AS dish_name, m.name AS menu_name FROM order_items oi JOIN dishes d ON oi.dish_id = d.dish_id LEFT JOIN menus m ON oi.menu_id = m.menu_id WHERE oi.order_id = ? ORDER BY oi.item_id");
             istmt.setInt(1, orderId);
             irs = istmt.executeQuery();
             List<OrderItem> items = new ArrayList<>();
@@ -261,14 +474,130 @@ public class OrdersResourceApiServlet extends HttpServlet {
                 OrderItem it = new OrderItem();
                 it.setItemId(irs.getInt("item_id"));
                 it.setOrderId(irs.getInt("order_id"));
+                it.setMenuId(irs.getInt("menu_id"));
                 it.setDishId(irs.getInt("dish_id"));
                 it.setQuantity(irs.getInt("quantity"));
                 it.setUnitPrice(irs.getBigDecimal("unit_price"));
                 it.setDishName(irs.getString("dish_name"));
+                it.setMenuName(irs.getString("menu_name"));
                 items.add(it);
             }
             order.setItems(items);
             return order;
+        } finally {
+            if (irs != null) try { irs.close(); } catch (SQLException ignored) {}
+            if (istmt != null) try { istmt.close(); } catch (SQLException ignored) {}
+            DBUtil.close(conn, ostmt, ors);
+        }
+    }
+
+    private boolean isPackageMenu(Connection conn, int menuId, int restaurantId) throws SQLException {
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        try {
+            ps = conn.prepareStatement("SELECT is_package FROM menus WHERE menu_id = ? AND restaurant_id = ?");
+            ps.setInt(1, menuId);
+            ps.setInt(2, restaurantId);
+            rs = ps.executeQuery();
+            if (!rs.next()) return false;
+            return rs.getBoolean(1);
+        } finally {
+            DBUtil.close(null, ps, rs);
+        }
+    }
+
+    static class MenuItemSnapshot {
+        int dishId;
+        int sortOrder;
+        int quantity;
+    }
+
+    private java.util.List<MenuItemSnapshot> fetchMenuItemsSnapshot(Connection conn, int menuId) throws SQLException {
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        try {
+            ps = conn.prepareStatement("SELECT dish_id, sort_order, quantity FROM menu_items WHERE menu_id = ? ORDER BY sort_order, menu_item_id");
+            ps.setInt(1, menuId);
+            rs = ps.executeQuery();
+            java.util.List<MenuItemSnapshot> list = new java.util.ArrayList<>();
+            while (rs.next()) {
+                MenuItemSnapshot s = new MenuItemSnapshot();
+                s.dishId = rs.getInt(1);
+                s.sortOrder = rs.getInt(2);
+                s.quantity = rs.getInt(3);
+                list.add(s);
+            }
+            return list;
+        } finally {
+            DBUtil.close(null, ps, rs);
+        }
+    }
+
+    private java.math.BigDecimal fetchUnitPrice(Connection conn, int restaurantId, int menuId, int dishId) throws SQLException {
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        try {
+            ps = conn.prepareStatement("SELECT mi.price FROM menu_items mi JOIN menus m ON mi.menu_id = m.menu_id WHERE m.restaurant_id = ? AND mi.menu_id = ? AND mi.dish_id = ?");
+            ps.setInt(1, restaurantId);
+            ps.setInt(2, menuId);
+            ps.setInt(3, dishId);
+            rs = ps.executeQuery();
+            if (!rs.next()) return java.math.BigDecimal.ZERO;
+            return rs.getBigDecimal(1);
+        } finally {
+            DBUtil.close(null, ps, rs);
+        }
+    }
+
+    private java.util.List<Order> fetchOrdersForUser(int userId) throws SQLException {
+        Connection conn = null;
+        PreparedStatement ostmt = null;
+        PreparedStatement istmt = null;
+        ResultSet ors = null;
+        ResultSet irs = null;
+        try {
+            conn = DBUtil.getConnection();
+            ostmt = conn.prepareStatement("SELECT order_id, user_id, restaurant_id, total_price, status, order_time FROM orders WHERE user_id = ? ORDER BY order_time DESC");
+            ostmt.setInt(1, userId);
+            ors = ostmt.executeQuery();
+            java.util.List<Order> orders = new java.util.ArrayList<>();
+            java.util.List<Integer> orderIds = new java.util.ArrayList<>();
+            java.util.Map<Integer, Order> map = new java.util.HashMap<>();
+            while (ors.next()) {
+                Order order = new Order();
+                order.setOrderId(ors.getInt("order_id"));
+                order.setUserId(ors.getInt("user_id"));
+                order.setRestaurantId(ors.getInt("restaurant_id"));
+                order.setTotalPrice(ors.getBigDecimal("total_price"));
+                order.setStatus(ors.getString("status"));
+                try { order.setCreatedAt(ors.getTimestamp("order_time")); } catch (Exception ignored) {}
+                orders.add(order);
+                orderIds.add(order.getOrderId());
+                map.put(order.getOrderId(), order);
+            }
+            if (orderIds.isEmpty()) return orders;
+            StringBuilder in = new StringBuilder();
+            for (int i = 0; i < orderIds.size(); i++) { if (i > 0) in.append(','); in.append('?'); }
+            istmt = conn.prepareStatement("SELECT oi.item_id, oi.order_id, oi.menu_id, oi.dish_id, oi.quantity, oi.unit_price, d.name AS dish_name, m.name AS menu_name FROM order_items oi JOIN dishes d ON oi.dish_id = d.dish_id LEFT JOIN menus m ON oi.menu_id = m.menu_id WHERE oi.order_id IN (" + in + ") ORDER BY oi.item_id");
+            for (int i = 0; i < orderIds.size(); i++) istmt.setInt(i + 1, orderIds.get(i));
+            irs = istmt.executeQuery();
+            while (irs.next()) {
+                OrderItem it = new OrderItem();
+                it.setItemId(irs.getInt("item_id"));
+                it.setOrderId(irs.getInt("order_id"));
+                it.setMenuId(irs.getInt("menu_id"));
+                it.setDishId(irs.getInt("dish_id"));
+                it.setQuantity(irs.getInt("quantity"));
+                it.setUnitPrice(irs.getBigDecimal("unit_price"));
+                it.setDishName(irs.getString("dish_name"));
+                it.setMenuName(irs.getString("menu_name"));
+                Order o = map.get(it.getOrderId());
+                if (o != null) {
+                    if (o.getItems() == null) o.setItems(new java.util.ArrayList<>());
+                    o.getItems().add(it);
+                }
+            }
+            return orders;
         } finally {
             if (irs != null) try { irs.close(); } catch (SQLException ignored) {}
             if (istmt != null) try { istmt.close(); } catch (SQLException ignored) {}

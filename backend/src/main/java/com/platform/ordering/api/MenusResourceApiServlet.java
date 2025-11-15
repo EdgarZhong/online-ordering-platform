@@ -20,6 +20,9 @@ public class MenusResourceApiServlet extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         resp.setCharacterEncoding("UTF-8");
         resp.setContentType("application/json;charset=UTF-8");
+        resp.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        resp.setHeader("Pragma", "no-cache");
+        resp.setDateHeader("Expires", 0);
 
         String path = req.getPathInfo();
         PrintWriter out = resp.getWriter();
@@ -41,7 +44,7 @@ public class MenusResourceApiServlet extends HttpServlet {
             int menuId = Integer.parseInt(parts[1]);
             conn = DBUtil.getConnection();
             ps = conn.prepareStatement(
-                    "SELECT d.dish_id, d.name, d.image_url, d.description, mi.price " +
+                    "SELECT d.dish_id, d.name, d.image_url, d.description, mi.price, mi.sort_order, mi.quantity " +
                             "FROM menu_items mi " +
                             "JOIN dishes d ON mi.dish_id = d.dish_id " +
                             "JOIN menus m ON mi.menu_id = m.menu_id " +
@@ -60,7 +63,9 @@ public class MenusResourceApiServlet extends HttpServlet {
                         .append("\"name\":\"").append(escape(rs.getString("name"))).append('\"').append(',')
                         .append("\"imageUrl\":\"").append(escape(rs.getString("image_url"))).append('\"').append(',')
                         .append("\"description\":\"").append(escape(rs.getString("description"))).append('\"').append(',')
-                        .append("\"price\":").append(rs.getBigDecimal("price"))
+                        .append("\"price\":").append(rs.getBigDecimal("price")).append(',')
+                        .append("\"sortOrder\":").append(rs.getInt("sort_order")).append(',')
+                        .append("\"defaultQuantity\":").append(rs.getInt("quantity"))
                         .append('}');
             }
             sb.append(']');

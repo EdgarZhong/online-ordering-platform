@@ -173,10 +173,12 @@
     "restaurantId": 1,
     "items": [
       {
+        "menuId": 2,
         "dishId": 101,
         "quantity": 1
       },
       {
+        "menuId": 2,
         "dishId": 102,
         "quantity": 2
       }
@@ -200,12 +202,12 @@
   }
   ```
 - **校验与规则**:
-  - 购物车中所有 `dishId` 必须属于同一 `restaurantId`
-  - 每个 `dishId` 必须存在且可售（根据商家端设定）
+  - 每个 `item` 必须提供 `menuId` 与 `dishId`；以 `menu_items` 中该组合的 `price` 为准
+  - `menuId` 必须属于 `restaurantId`；否则拒绝（`400`）
+  - 同一餐厅中允许菜品在多个菜单出现；下单以用户选择菜单的价格计算
   - `totalPrice` 服务端计算，不接受客户端传入
   - 原子性：`orders` 与 `order_items` 在同一事务中写入；任一失败回滚
   - 防越权：会话用户作为订单归属 `user_id`
-  - 同一菜品在多个菜单中出现时，单价取该餐厅下该菜品的**最低价**（`MIN(menu_items.price)`）
 
 #### 3.6 查询订单状态
 
@@ -220,7 +222,7 @@
   - `status` (string) 订单状态（见下方枚举）
   - `totalPrice` (number) 总价
   - `createdAt` (string) 下单时间（服务器时间）
-  - `items` (array) 订单明细：`dishName`、`quantity`、`unitPrice`
+  - `items` (array) 订单明细：`menuId`、`menuName`、`dishName`、`quantity`、`unitPrice`
 - **成功响应 (200 OK)**:
   ```json
   {
@@ -231,11 +233,15 @@
     "createdAt": "2025-11-07T14:30:00Z",
     "items": [
       {
+        "menuId": 2,
+        "menuName": "招牌单点",
         "dishName": "红烧肉",
         "quantity": 1,
         "unitPrice": 45.00
       },
       {
+        "menuId": 2,
+        "menuName": "招牌单点",
         "dishName": "清蒸鲈鱼",
         "quantity": 2,
         "unitPrice": 68.50
@@ -243,6 +249,7 @@
     ]
   }
   ```
+ - 历史兼容：旧订单项可能没有 `menuId`（为 `null` 或省略）。
 - **错误响应 (401 Unauthorized)**:
   ```json
   { "error": "Unauthorized" }
@@ -307,11 +314,36 @@
      "http://localhost:8080/{context}/api/restaurants/1/menus"
    ```
  - **curl 示例**:
-   ```bash
-   curl -s \
-     -H "Accept: application/json" \
-     "http://localhost:8080/{context}/api/menus/1/items"
-   ```
+  ```bash
+  curl -s \
+    -H "Accept: application/json" \
+    "http://localhost:8080/{context}/api/menus/1/items"
+  ```
+
+---
+
+## 7. 测试指引 (How to Test)
+- 初始化数据：执行 `database/initial-data.sql`（包含两家餐厅、两个消费者、四个订单示例）
+- 登录：使用 `testcustomer` 或 `testcustomer2` 登录
+- 浏览器测试：打开 `test/api-tests.jsp`
+  - 成功下单：使用预填 `restaurantId=1, menuId=1` 的示例 JSON 点击“下单”，返回 `201` 与正确总价
+  - 错误用例：
+    - 跨餐厅：`restaurantId=1`、`menuId=3`（餐厅2菜单）→ 返回 `400`
+    - 无效组合：`menuId=2`、`dishId=3`（菜品不在该菜单）→ 返回 `400`
+  - 查询订单：点击“查询订单A/B/C/D”按钮，查看 `menuId/menuName/dishName/quantity/unitPrice` 与总价
+- 命令行示例：
+  ```bash
+  curl -s -X POST \
+    -H "Content-Type: application/json" -H "Accept: application/json" \
+    -b "JSESSIONID=..." \
+    -d '{"restaurantId":1,"items":[{"menuId":1,"dishId":1,"quantity":1},{"menuId":1,"dishId":3,"quantity":2}]}' \
+    "http://localhost:8080/{context}/api/orders"
+  ```
+- 数据库迁移提示：若已有环境需先执行
+  ```sql
+  ALTER TABLE order_items ADD COLUMN menu_id INT NULL;
+  ALTER TABLE order_items ADD CONSTRAINT fk_order_items_menu FOREIGN KEY (menu_id) REFERENCES menus(menu_id);
+  ```
 
 ---
 
@@ -320,6 +352,6 @@
 curl -s -X POST \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -b "JSESSIONID=..." \
-  -d '{"restaurantId":1,"items":[{"dishId":1,"quantity":1},{"dishId":3,"quantity":2}]}' \
+  -d '{"restaurantId":1,"items":[{"menuId":1,"dishId":1,"quantity":1},{"menuId":1,"dishId":3,"quantity":2}]}' \
   "http://localhost:8080/{context}/api/orders"
 ```

@@ -110,8 +110,10 @@ CREATE TABLE order_items (
     dish_id INT NOT NULL,
     quantity INT NOT NULL CHECK (quantity > 0),
     unit_price DECIMAL(10, 2) NOT NULL, -- 下单时的单价，防止菜品价格变动影响历史订单
+    menu_id INT NULL,
     CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE,
-    CONSTRAINT fk_order_items_dish FOREIGN KEY (dish_id) REFERENCES dishes(dish_id)
+    CONSTRAINT fk_order_items_dish FOREIGN KEY (dish_id) REFERENCES dishes(dish_id),
+    CONSTRAINT fk_order_items_menu FOREIGN KEY (menu_id) REFERENCES menus(menu_id)
 );
 COMMENT ON TABLE order_items IS '订单详情表，记录订单中的每个菜品';
 

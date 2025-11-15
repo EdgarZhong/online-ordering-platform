@@ -6,6 +6,11 @@
 
     <display-name>Online Ordering Platform</display-name>
 
+    <context-param>
+        <param-name>consumerDefaultRedirect</param-name>
+        <param-value>http://localhost:5173/</param-value>
+    </context-param>
+
     <!-- 1. 字符编码过滤器配置 -->
     <filter>
         <filter-name>CharacterEncodingFilter</filter-name>
