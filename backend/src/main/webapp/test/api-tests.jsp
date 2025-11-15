@@ -63,5 +63,14 @@
     <pre id="out5"></pre>
 </div>
 
+<div class="endpoint">
+    <div>
+        <b>POST</b> <code><%=request.getContextPath()%>/api/orders</code>
+        <textarea id="orderJson" rows="6" style="width:100%">{"restaurantId":1,"items":[{"dishId":1,"quantity":1},{"dishId":3,"quantity":2}]}</textarea>
+        <button onclick="fetch('<%=request.getContextPath()%>/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:document.getElementById('orderJson').value}).then(r=>r.text()).then(t=>document.getElementById('out6').textContent=t)">下单</button>
+    </div>
+    <pre id="out6"></pre>
+</div>
+
 </body>
 </html>

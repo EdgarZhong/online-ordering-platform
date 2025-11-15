@@ -205,6 +205,7 @@
   - `totalPrice` 服务端计算，不接受客户端传入
   - 原子性：`orders` 与 `order_items` 在同一事务中写入；任一失败回滚
   - 防越权：会话用户作为订单归属 `user_id`
+  - 同一菜品在多个菜单中出现时，单价取该餐厅下该菜品的**最低价**（`MIN(menu_items.price)`）
 
 #### 3.6 查询订单状态
 
@@ -254,12 +255,12 @@
   ```
 - **状态枚举 (Status Enum)**:
   - `PENDING`, `CONFIRMED`, `PREPARING`, `READY_FOR_PICKUP`, `COMPLETED`, `CANCELLED`
-- **curl 示例**:
-  ```bash
-  curl -s -b "JSESSIONID=..." \
-    -H "Accept: application/json" \
-    "http://localhost:8080/{context}/api/orders/1"
-  ```
+ - **curl 示例**:
+   ```bash
+   curl -s -b "JSESSIONID=..." \
+     -H "Accept: application/json" \
+     "http://localhost:8080/{context}/api/orders/1"
+   ```
 
 ---
 
@@ -311,3 +312,14 @@
      -H "Accept: application/json" \
      "http://localhost:8080/{context}/api/menus/1/items"
    ```
+
+---
+
+## 6. curl 综合示例：下单
+```bash
+curl -s -X POST \
+  -H "Content-Type: application/json" -H "Accept: application/json" \
+  -b "JSESSIONID=..." \
+  -d '{"restaurantId":1,"items":[{"dishId":1,"quantity":1},{"dishId":3,"quantity":2}]}' \
+  "http://localhost:8080/{context}/api/orders"
+```

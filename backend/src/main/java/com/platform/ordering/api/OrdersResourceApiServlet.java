@@ -18,6 +18,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+
+import com.google.gson.Gson;
+import com.google.gson.annotations.SerializedName;
 
 @WebServlet(name = "OrdersResourceApiServlet", urlPatterns = "/api/orders/*")
 public class OrdersResourceApiServlet extends HttpServlet {
@@ -101,6 +105,131 @@ public class OrdersResourceApiServlet extends HttpServlet {
         } finally {
             DBUtil.close(conn, ps, rs);
         }
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        resp.setCharacterEncoding("UTF-8");
+        resp.setContentType("application/json;charset=UTF-8");
+
+        PrintWriter out = resp.getWriter();
+        User user = (User) req.getSession().getAttribute("user");
+        if (user == null || user.getUserId() <= 0) {
+            resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            out.write("{\"error\":\"Unauthorized\"}");
+            return;
+        }
+
+        String body = req.getReader().lines().collect(Collectors.joining());
+        Gson gson = new Gson();
+        OrderReq orderReq;
+        try {
+            orderReq = gson.fromJson(body, OrderReq.class);
+        } catch (Exception e) {
+            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            out.write("{\"error\":\"Invalid JSON\"}");
+            return;
+        }
+        if (orderReq == null || orderReq.restaurantId == null || orderReq.items == null || orderReq.items.isEmpty()) {
+            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            out.write("{\"error\":\"Missing restaurantId or items\"}");
+            return;
+        }
+        int restaurantId = orderReq.restaurantId;
+        for (OrderItemReq it : orderReq.items) {
+            if (it == null || it.dishId == null || it.quantity == null || it.quantity <= 0) {
+                resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                out.write("{\"error\":\"Invalid item\"}");
+                return;
+            }
+        }
+
+        Connection conn = null;
+        PreparedStatement priceStmt = null;
+        PreparedStatement insertOrderStmt = null;
+        PreparedStatement insertItemStmt = null;
+        PreparedStatement updateTotalStmt = null;
+        ResultSet rs = null;
+        try {
+            conn = DBUtil.getConnection();
+            conn.setAutoCommit(false);
+
+            java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+            java.util.Map<Integer, java.math.BigDecimal> unitPriceMap = new java.util.HashMap<>();
+            priceStmt = conn.prepareStatement(
+                    "SELECT MIN(mi.price) AS price FROM menu_items mi " +
+                            "JOIN menus m ON mi.menu_id = m.menu_id " +
+                            "WHERE m.restaurant_id = ? AND mi.dish_id = ?");
+            for (OrderItemReq it : orderReq.items) {
+                priceStmt.setInt(1, restaurantId);
+                priceStmt.setInt(2, it.dishId);
+                rs = priceStmt.executeQuery();
+                if (!rs.next() || rs.getBigDecimal(1) == null) {
+                    conn.rollback();
+                    resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                    out.write("{\"error\":\"Invalid items in the order. All items must belong to the same restaurant and be available.\"}");
+                    return;
+                }
+                java.math.BigDecimal unitPrice = rs.getBigDecimal(1);
+                unitPriceMap.put(it.dishId, unitPrice);
+                total = total.add(unitPrice.multiply(new java.math.BigDecimal(it.quantity)));
+                if (rs != null) { try { rs.close(); } catch (SQLException ignored) {} }
+            }
+
+            insertOrderStmt = conn.prepareStatement(
+                    "INSERT INTO orders (user_id, restaurant_id, total_price, status, order_time) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) RETURNING order_id");
+            insertOrderStmt.setInt(1, user.getUserId());
+            insertOrderStmt.setInt(2, restaurantId);
+            insertOrderStmt.setBigDecimal(3, total);
+            insertOrderStmt.setString(4, "PENDING");
+            rs = insertOrderStmt.executeQuery();
+            if (!rs.next()) { conn.rollback(); throw new SQLException("Order id not returned"); }
+            int orderId = rs.getInt(1);
+            if (rs != null) { try { rs.close(); } catch (SQLException ignored) {} }
+
+            insertItemStmt = conn.prepareStatement(
+                    "INSERT INTO order_items (order_id, dish_id, quantity, unit_price) VALUES (?, ?, ?, ?)");
+            for (OrderItemReq it : orderReq.items) {
+                insertItemStmt.setInt(1, orderId);
+                insertItemStmt.setInt(2, it.dishId);
+                insertItemStmt.setInt(3, it.quantity);
+                insertItemStmt.setBigDecimal(4, unitPriceMap.get(it.dishId));
+                insertItemStmt.addBatch();
+            }
+            insertItemStmt.executeBatch();
+
+            conn.commit();
+
+            StringBuilder sb = new StringBuilder();
+            sb.append('{')
+                    .append("\"orderId\":").append(orderId).append(',')
+                    .append("\"status\":\"PENDING\",")
+                    .append("\"totalPrice\":").append(total).append(',')
+                    .append("\"createdAt\":\"").append(new java.sql.Timestamp(System.currentTimeMillis()).toString()).append('\"')
+                    .append('}');
+            resp.setStatus(HttpServletResponse.SC_CREATED);
+            out.write(sb.toString());
+        } catch (SQLException e) {
+            if (conn != null) {
+                try { conn.rollback(); } catch (SQLException ignored) {}
+            }
+            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            out.write("{\"error\":\"Internal server error\"}");
+        } finally {
+            DBUtil.close(null, updateTotalStmt, null);
+            DBUtil.close(null, insertItemStmt, null);
+            DBUtil.close(null, insertOrderStmt, null);
+            DBUtil.close(conn, priceStmt, null);
+        }
+    }
+
+    static class OrderReq {
+        @SerializedName("restaurantId") Integer restaurantId;
+        @SerializedName("items") java.util.List<OrderItemReq> items;
+    }
+    static class OrderItemReq {
+        @SerializedName("dishId") Integer dishId;
+        @SerializedName("quantity") Integer quantity;
     }
 
     private Order fetchOrderDetail(int orderId, int userId) throws SQLException {
