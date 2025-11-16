@@ -28,12 +28,14 @@ export const getMenus = async (restaurantId) => {
   }))
 }
 export const getMenuItems = async (menuId) => {
-  const data = await instance.get(`/menus/${menuId}/items?t=${Date.now()}`).then(r => r.data)
-  return (data || []).map(it => ({
+  const res = await instance.get(`/menus/${menuId}/items?t=${Date.now()}`)
+  const data = res.data
+  const items = (data || []).map(it => ({
     ...it,
     sortOrder: it.sortOrder !== undefined ? it.sortOrder : (it.sort_order !== undefined ? it.sort_order : 0),
     defaultQuantity: it.defaultQuantity !== undefined ? it.defaultQuantity : (it.quantity !== undefined ? it.quantity : 1)
   }))
+  return { items, version: res.headers['x-menu-version'] || '', signature: res.headers['x-menu-signature'] || res.headers['etag'] || '' }
 }
 export const createOrder = (payload) => instance.post('/orders', payload).then(r => r.data)
 export const getOrder = (orderId) => instance.get(`/orders/${orderId}`).then(r => r.data)

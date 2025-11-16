@@ -55,6 +55,7 @@ public class MenusResourceApiServlet extends HttpServlet {
             StringBuilder sb = new StringBuilder();
             sb.append('[');
             boolean first = true;
+            StringBuilder sigInput = new StringBuilder();
             while (rs.next()) {
                 if (!first) sb.append(',');
                 first = false;
@@ -67,8 +68,17 @@ public class MenusResourceApiServlet extends HttpServlet {
                         .append("\"sortOrder\":").append(rs.getInt("sort_order")).append(',')
                         .append("\"defaultQuantity\":").append(rs.getInt("quantity"))
                         .append('}');
+                sigInput.append(rs.getInt("dish_id")).append('|')
+                        .append(rs.getInt("sort_order")).append('|')
+                        .append(rs.getInt("quantity")).append('|')
+                        .append(rs.getBigDecimal("price")).append(';');
             }
             sb.append(']');
+            String signature = sha256Hex(sigInput.toString());
+            String version = signature.length() >= 12 ? signature.substring(0, 12) : signature;
+            resp.setHeader("ETag", "menu-" + menuId + "-" + version);
+            resp.setHeader("X-Menu-Signature", signature);
+            resp.setHeader("X-Menu-Version", version);
             out.write(sb.toString());
         } catch (NumberFormatException e) {
             resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
@@ -104,5 +114,19 @@ public class MenusResourceApiServlet extends HttpServlet {
             }
         }
         return sb.toString();
+    }
+
+    private static String sha256Hex(String input) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] bytes = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : bytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

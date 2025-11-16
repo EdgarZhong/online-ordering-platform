@@ -93,7 +93,9 @@ onMounted(async () => {
 
 watch(activeMenuId, async (mid) => {
   if (!mid) return
-  items.value = await getMenuItems(mid)
+  const res = await getMenuItems(mid)
+  items.value = res.items
+  menuMeta.value = { version: res.version, signature: res.signature }
   packageQty.value = 1
 })
 
@@ -119,7 +121,7 @@ function incPkgOutside() {
   } else {
     const payloadItems = items.value.map(it => ({ dishId: it.dishId, sortOrder: (it.sortOrder ?? it.sort_order ?? 0), quantity: (it.defaultQuantity ?? it.quantity ?? 1), name: it.name, price: it.price }))
     const m = menus.value.find(mm => mm.menuId === activeMenuId.value)
-    cart.addPackage(rid, activeMenuId.value, payloadItems, 1, m?.name)
+    cart.addPackage(rid, activeMenuId.value, payloadItems, 1, m?.name, menuMeta.value)
   }
 }
 function decPkgOutside() {
@@ -140,6 +142,7 @@ const packageUnitPrice = computed(() => {
   return items.value.reduce((s, it) => s + Number(it.price || 0) * Number(it.defaultQuantity || it.quantity || 1), 0)
 })
 const sortedItems = computed(() => items.value.slice().sort((a,b)=> (a.sortOrder||0)-(b.sortOrder||0)))
+const menuMeta = ref({ version: '', signature: '' })
 </script>
 
 <style>

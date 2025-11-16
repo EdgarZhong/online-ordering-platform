@@ -1,4 +1,55 @@
 # 开发日志
+## 2025-11-16 - by 钟丞
+
+### 本次提交内容：消费者端 Vue SPA 联调闭环（购物车/下单/订单历史）与套餐打包销售逻辑
+
+在 Sprint 3 基础上完成前端骨架、路由与状态管理，实现从餐厅浏览→菜单查看→购物车→下单→订单详情/历史的闭环；同时将下单契约改造为“菜单为单位”，支持套餐严格校验与计价，并优化缓存与导航体验。
+
+#### 变更摘要
+- 前端项目骨架与代理（Vite + Vue 3 + Pinia + vue-router）：
+  - `frontend/package.json`, `frontend/vite.config.js`, `frontend/index.html`, `frontend/src/main.js`, `frontend/src/App.vue`
+  - 代理上下文：`/online_ordering_backend_war_exploded/api`
+- 路由与页面：
+  - 餐厅列表与详情：`frontend/src/pages/RestaurantList.vue`, `frontend/src/pages/RestaurantDetail.vue`
+  - 订单详情与历史：`frontend/src/pages/OrderDetail.vue`, `frontend/src/pages/OrderHistory.vue`
+- 状态管理（购物车按菜单维度）：
+  - `frontend/src/stores/cart.js` 结构 `{ [restaurantId]: { menus:[{menuId,isPackage,quantity,items[{dishId,sortOrder,quantity,name,price}]}], total } }`
+  - 动作：`addItem/addPackage/updateItemQty/updatePackageQty/removeItem/clearCart/toOrderPayload`
+- API 封装：
+  - `frontend/src/api/index.js` 新增/改造 `getRestaurants/getRestaurant/getMenus/getMenuItems/getOrders/getOrder/createOrder/getSession`；对只读接口加时间戳绕缓存
+- 套餐打包销售与下单契约改造：
+  - `backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java` 将 `POST /api/orders` 从 `items[]` 改造为 `menus[]`；支持套餐校验（`sort_order/id/quantity` 全匹配）、非套餐校验、计价以 `menu_items.price` 为准；写入 `order_items.menu_id`
+  - 订单详情 `GET /api/orders/{orderId}` 增加分组字段 `menus[]`（含 `menuUnitPrice`、`menuTotalPrice`、每项 `perPackageQuantity/sortOrder`）
+- 只读接口禁用缓存：
+  - `RestaurantResourceApiServlet.java`, `MenusResourceApiServlet.java`, `RestaurantsApiServlet.java` 设置 `Cache-Control/Pragma/Expires`
+- 前端导航与统一排版：
+  - 顶栏新增“餐厅列表/历史订单”导航；右侧保留“欢迎，用户名”与退出
+  - 统一文本样式类：`.text-menu-name/.text-dish-name/.text-price/.text-qty/.text-muted`（`frontend/src/App.vue`）
+- 购物车与页面交互优化：
+  - 套餐：名称下显示“单价”，份数加减按钮；菜品行统一显示“￥价格 × 数量”，不显示公式
+  - 非套餐：名称同一行右侧显示数量与加减；名称下方显示“单价”；数量减至 0 自动移除，菜单清空后标题消失
+  - 外部套餐页：列表显示“总价：￥xx，包含：”；每行右侧统一“￥价格 × 每份数量”；内容区域限宽避免被购物车遮挡
+- 历史订单页改为摘要卡片：
+  - 仅显示餐厅、总价（两位小数）、状态、时间；卡片可点击跳转详情；按时间倒序
+- 登录与会话：
+  - 登录成功重定向支持 `redirect` 并默认按配置项返回前端；`web.xml` 新增 `consumerDefaultRedirect`
+  - 新增 `GET /api/session` 供前端路由守卫使用；未登录或商户登录访问消费者前端即跳转登录
+- 商家后台提醒：
+  - `admin/dish-management.jsp` 在编辑菜品默认价格且发生变更时弹窗提示“仅修改默认价格，菜单中的实际价格不变”，引导前往菜单管理修改
+- 测试页：
+  - `backend/src/main/webapp/test/api-tests.jsp` 新增菜单维度下单示例与非法用例（跨餐厅、套餐不匹配、非法菜品/缺项）
+
+#### 验证结果
+- 端到端闭环：从首页进入餐厅详情，套餐/非套餐加入购物车，提交订单返回 `201`；跳转订单详情页显示按“菜单-菜品”分组的明细；历史订单页摘要正确并可跳转详情
+- 套餐校验：缺项/数量不匹配返回 `400 {"error":"套餐<menu_id>不匹配"}`；计价以 `menu_items.price` 为准，同菜不同菜单价格独立
+- 缓存刷新：商家修改菜单项价格后，前端刷新即可显示最新价格（只读接口禁用缓存 + 请求加时间戳）
+- 导航与样式：顶栏导航可用；菜单名大于菜品名；价格统一两位小数；购物车与订单详情页的菜单-菜品显示逻辑一致
+
+#### 后续待办
+- 套餐清单签名/版本校验：返回 `ETag/version` 与签名令牌，避免下单时菜单变更导致提示不一致
+- 历史订单分页与筛选（进行中/已完成）
+- 商家菜单管理增加批量改价与排序的更友好交互
+- 前端组件化与样式进一步统一（卡片、行距、对齐）
 
 ## 2025-11-15 - by 钟丞
 
@@ -229,54 +280,30 @@
 
 我预计将在明天测试好项目基础，随后大家就可以尽情编码了
 我们的目标是高效协作，避免返工。谢谢大家！
-## 2025-11-16 - by 钟丞
+## 2025-11-16 - by 钟丞（Sprint 3 收官增量）
 
-### 本次提交内容：消费者端 Vue SPA 联调闭环（购物车/下单/订单历史）与套餐打包销售逻辑
+### 增量内容：套餐版本/签名校验、历史订单分页/筛选、前端错误提示细化
 
-在 Sprint 3 基础上完成前端骨架、路由与状态管理，实现从餐厅浏览→菜单查看→购物车→下单→订单详情/历史的闭环；同时将下单契约改造为“菜单为单位”，支持套餐严格校验与计价，并优化缓存与导航体验。
+- 套餐版本/签名校验：
+  - `GET /api/menus/{menuId}/items` 在响应头返回 `ETag/X-Menu-Signature/X-Menu-Version`（基于有序串 `dishId|sortOrder|quantity|price` 的 SHA-256）。
+  - 前端 `getMenuItems` 读取签名/版本并在加入套餐时写入购物车；`toOrderPayload` 随菜单传递 `menuVersion/menuSignature`。
+  - `POST /api/orders` 可选校验签名/版本；不一致或套餐项差异返回 `409 Conflict`，`details` 含 `versionMismatch/quantityDiffs/missingItems`。
+- 历史订单分页与筛选：
+  - `GET /api/orders` 支持 `page/size/status/from/to` 查询参数；按时间倒序；分页元数据通过响应头 `X-Page/X-Size` 返回。
+- 前端错误提示细化：
+  - 下单遇到 `409`（菜单变更）时弹窗提示“下单失败：菜单已变更，请刷新页面”。
 
-#### 变更摘要
-- 前端项目骨架与代理（Vite + Vue 3 + Pinia + vue-router）：
-  - `frontend/package.json`, `frontend/vite.config.js`, `frontend/index.html`, `frontend/src/main.js`, `frontend/src/App.vue`
-  - 代理上下文：`/online_ordering_backend_war_exploded/api`
-- 路由与页面：
-  - 餐厅列表与详情：`frontend/src/pages/RestaurantList.vue`, `frontend/src/pages/RestaurantDetail.vue`
-  - 订单详情与历史：`frontend/src/pages/OrderDetail.vue`, `frontend/src/pages/OrderHistory.vue`
-- 状态管理（购物车按菜单维度）：
-  - `frontend/src/stores/cart.js` 结构 `{ [restaurantId]: { menus:[{menuId,isPackage,quantity,items[{dishId,sortOrder,quantity,name,price}]}], total } }`
-  - 动作：`addItem/addPackage/updateItemQty/updatePackageQty/removeItem/clearCart/toOrderPayload`
-- API 封装：
-  - `frontend/src/api/index.js` 新增/改造 `getRestaurants/getRestaurant/getMenus/getMenuItems/getOrders/getOrder/createOrder/getSession`；对只读接口加时间戳绕缓存
-- 套餐打包销售与下单契约改造：
-  - `backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java` 将 `POST /api/orders` 从 `items[]` 改造为 `menus[]`；支持套餐校验（`sort_order/id/quantity` 全匹配）、非套餐校验、计价以 `menu_items.price` 为准；写入 `order_items.menu_id`
-  - 订单详情 `GET /api/orders/{orderId}` 增加分组字段 `menus[]`（含 `menuUnitPrice`、`menuTotalPrice`、每项 `perPackageQuantity/sortOrder`）
-- 只读接口禁用缓存：
-  - `RestaurantResourceApiServlet.java`, `MenusResourceApiServlet.java`, `RestaurantsApiServlet.java` 设置 `Cache-Control/Pragma/Expires`
-- 前端导航与统一排版：
-  - 顶栏新增“餐厅列表/历史订单”导航；右侧保留“欢迎，用户名”与退出
-  - 统一文本样式类：`.text-menu-name/.text-dish-name/.text-price/.text-qty/.text-muted`（`frontend/src/App.vue`）
-- 购物车与页面交互优化：
-  - 套餐：名称下显示“单价”，份数加减按钮；菜品行统一显示“￥价格 × 数量”，不显示公式
-  - 非套餐：名称同一行右侧显示数量与加减；名称下方显示“单价”；数量减至 0 自动移除，菜单清空后标题消失
-  - 外部套餐页：列表显示“总价：￥xx，包含：”；每行右侧统一“￥价格 × 每份数量”；内容区域限宽避免被购物车遮挡
-- 历史订单页改为摘要卡片：
-  - 仅显示餐厅、总价（两位小数）、状态、时间；卡片可点击跳转详情；按时间倒序
-- 登录与会话：
-  - 登录成功重定向支持 `redirect` 并默认按配置项返回前端；`web.xml` 新增 `consumerDefaultRedirect`
-  - 新增 `GET /api/session` 供前端路由守卫使用；未登录或商户登录访问消费者前端即跳转登录
-- 商家后台提醒：
-  - `admin/dish-management.jsp` 在编辑菜品默认价格且发生变更时弹窗提示“仅修改默认价格，菜单中的实际价格不变”，引导前往菜单管理修改
-- 测试页：
-  - `backend/src/main/webapp/test/api-tests.jsp` 新增菜单维度下单示例与非法用例（跨餐厅、套餐不匹配、非法菜品/缺项）
+### 代码位置
+- 后端：
+  - `backend/src/main/java/com/platform/ordering/api/MenusResourceApiServlet.java`（签名/版本头返回）
+  - `backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java`（签名/版本校验、返回409细节；分页查询实现与头返回）
+- 前端：
+  - `frontend/src/api/index.js`（返回 `items+version+signature`）
+  - `frontend/src/stores/cart.js`（在菜单维度购物车存储并随单传递 `menuVersion/menuSignature`）
+  - `frontend/src/pages/RestaurantDetail.vue`（读取并写入签名/版本到购物车）
+  - `frontend/src/components/CheckoutForm.vue`（409 弹窗提示）
 
-#### 验证结果
-- 端到端闭环：从首页进入餐厅详情，套餐/非套餐加入购物车，提交订单返回 `201`；跳转订单详情页显示按“菜单-菜品”分组的明细；历史订单页摘要正确并可跳转详情
-- 套餐校验：缺项/数量不匹配返回 `400 {"error":"套餐<menu_id>不匹配"}`；计价以 `menu_items.price` 为准，同菜不同菜单价格独立
-- 缓存刷新：商家修改菜单项价格后，前端刷新即可显示最新价格（只读接口禁用缓存 + 请求加时间戳）
-- 导航与样式：顶栏导航可用；菜单名大于菜品名；价格统一两位小数；购物车与详情页显示逻辑一致
-
-#### 后续待办
-- 套餐清单签名/版本校验：返回 `ETag/version` 与签名令牌，避免下单时菜单变更导致提示不一致
-- 历史订单分页与筛选（进行中/已完成）
-- 商家菜单管理增加批量改价与排序的更友好交互
-- 前端组件化与样式进一步统一（卡片、行距、对齐）
+### 测试用例
+- `backend/src/main/webapp/test/api-tests.jsp`：
+  - 套餐数量不匹配与缺项用例（返回 409）。
+  - 订单分页查询按钮（显示 `X-Page/X-Size` 并输出内容）。

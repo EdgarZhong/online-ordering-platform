@@ -22,14 +22,15 @@ export const useCartStore = defineStore('cart', {
       cart.total = cart.menus.reduce((s, m) => s + m.items.reduce((ss, it) => ss + (it.price || 0) * (m.isPackage ? (it.quantity * (m.quantity || 1)) : it.quantity), 0), 0)
       this.carts[restaurantId] = cart
     },
-    addPackage(restaurantId, menuId, items, quantity, menuName) {
+    addPackage(restaurantId, menuId, items, quantity, menuName, meta) {
       const cart = this.carts[restaurantId] || { menus: [], total: 0 }
       let menu = cart.menus.find(m => m.menuId === menuId)
-      if (!menu) { menu = { menuId, isPackage: true, quantity: 0, items: [], menuName: menuName }; cart.menus.push(menu) }
+      if (!menu) { menu = { menuId, isPackage: true, quantity: 0, items: [], menuName: menuName, menuVersion: '', menuSignature: '' }; cart.menus.push(menu) }
       menu.isPackage = true
       if (menuName) menu.menuName = menuName
       menu.items = items.map(i => ({ dishId: i.dishId, sortOrder: i.sortOrder, quantity: i.quantity, name: i.name, price: i.price }))
       menu.quantity = quantity
+      if (meta) { menu.menuVersion = meta.version || ''; menu.menuSignature = meta.signature || '' }
       cart.total = cart.menus.reduce((s, m) => s + m.items.reduce((ss, it) => ss + (it.price || 0) * (m.isPackage ? (it.quantity * (m.quantity || 1)) : it.quantity), 0), 0)
       this.carts[restaurantId] = cart
     },
@@ -83,7 +84,9 @@ export const useCartStore = defineStore('cart', {
         menus: cart.menus.map(m => ({
           menuId: m.menuId,
           quantity: m.isPackage ? (m.quantity || 0) : 0,
-          items: m.items.map(it => ({ dishId: it.dishId, sortOrder: it.sortOrder, quantity: it.quantity }))
+          items: m.items.map(it => ({ dishId: it.dishId, sortOrder: it.sortOrder, quantity: it.quantity })),
+          menuVersion: m.menuVersion || '',
+          menuSignature: m.menuSignature || ''
         }))
       }
     }

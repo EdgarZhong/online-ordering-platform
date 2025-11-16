@@ -40,7 +40,16 @@ public class OrdersResourceApiServlet extends HttpServlet {
         }
         if (path == null || path.equals("/")) {
             try {
-                java.util.List<Order> orders = fetchOrdersForUser(user.getUserId());
+                int page = 0;
+                int size = 20;
+                String status = req.getParameter("status");
+                String from = req.getParameter("from");
+                String to = req.getParameter("to");
+                try { page = Integer.parseInt(req.getParameter("page")); } catch (Exception ignored) {}
+                try { size = Integer.parseInt(req.getParameter("size")); } catch (Exception ignored) {}
+                if (size <= 0) size = 20;
+                if (page < 0) page = 0;
+                java.util.List<Order> orders = fetchOrdersForUserPaged(user.getUserId(), page, size, status, from, to);
                 StringBuilder sb = new StringBuilder();
                 sb.append('[');
                 for (int oi = 0; oi < orders.size(); oi++) {
@@ -71,6 +80,8 @@ public class OrdersResourceApiServlet extends HttpServlet {
                     sb.append('}');
                 }
                 sb.append(']');
+                resp.setHeader("X-Page", String.valueOf(page));
+                resp.setHeader("X-Size", String.valueOf(size));
                 out.write(sb.toString());
             } catch (SQLException e) {
                 resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
@@ -305,24 +316,34 @@ public class OrdersResourceApiServlet extends HttpServlet {
                     java.util.List<MenuItemSnapshot> dbItems = fetchMenuItemsSnapshot(conn, mreq.menuId);
                     if (dbItems.size() != mreq.items.size()) {
                         conn.rollback();
-                        resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                        out.write("{\"error\":\"套餐" + mreq.menuId + "不匹配\"}");
+                        resp.setStatus(HttpServletResponse.SC_CONFLICT);
+                        out.write("{\"error\":\"套餐" + mreq.menuId + "不匹配\",\"details\":{\"missingItems\":true}}\n");
                         return;
                     }
+                    // optional signature/version check
+                    String serverSig = computeMenuSignature(conn, mreq.menuId);
+                    boolean versionMismatch = false;
+                    if (mreq.menuSignature != null && !mreq.menuSignature.isEmpty()) {
+                        versionMismatch = !mreq.menuSignature.equals(serverSig);
+                    }
+                    java.util.List<java.util.Map<String,Object>> qtyDiffs = new java.util.ArrayList<>();
                     for (int i = 0; i < dbItems.size(); i++) {
                         MenuItemSnapshot dbi = dbItems.get(i);
                         ItemReq cli = mreq.items.get(i);
                         if (cli == null || cli.dishId == null || cli.sortOrder == null || cli.quantity == null) {
                             conn.rollback();
-                            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                            resp.setStatus(HttpServletResponse.SC_CONFLICT);
                             out.write("{\"error\":\"套餐" + mreq.menuId + "不匹配\"}");
                             return;
                         }
                         if (dbi.dishId != cli.dishId || dbi.sortOrder != cli.sortOrder || dbi.quantity != cli.quantity) {
-                            conn.rollback();
-                            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                            out.write("{\"error\":\"套餐" + mreq.menuId + "不匹配\"}");
-                            return;
+                            java.util.Map<String,Object> diff = new java.util.HashMap<>();
+                            diff.put("dishId", cli.dishId);
+                            diff.put("serverSortOrder", dbi.sortOrder);
+                            diff.put("serverQuantity", dbi.quantity);
+                            diff.put("clientSortOrder", cli.sortOrder);
+                            diff.put("clientQuantity", cli.quantity);
+                            qtyDiffs.add(diff);
                         }
                         priceStmt.setInt(1, restaurantId);
                         priceStmt.setInt(2, mreq.menuId);
@@ -338,6 +359,30 @@ public class OrdersResourceApiServlet extends HttpServlet {
                         int finalQty = dbi.quantity * mreq.quantity;
                         total = total.add(unitPrice.multiply(new java.math.BigDecimal(finalQty)));
                         if (rs != null) { try { rs.close(); } catch (SQLException ignored) {} }
+                    }
+                    if (versionMismatch || !qtyDiffs.isEmpty()) {
+                        conn.rollback();
+                        resp.setStatus(HttpServletResponse.SC_CONFLICT);
+                        StringBuilder details = new StringBuilder();
+                        details.append('{').append("\"versionMismatch\":").append(versionMismatch);
+                        if (!qtyDiffs.isEmpty()) {
+                            details.append(',').append("\"quantityDiffs\":[");
+                            for (int i = 0; i < qtyDiffs.size(); i++) {
+                                if (i > 0) details.append(',');
+                                java.util.Map<String,Object> d = qtyDiffs.get(i);
+                                details.append('{')
+                                        .append("\"dishId\":").append(d.get("dishId"))
+                                        .append(',').append("\"serverSortOrder\":").append(d.get("serverSortOrder"))
+                                        .append(',').append("\"serverQuantity\":").append(d.get("serverQuantity"))
+                                        .append(',').append("\"clientSortOrder\":").append(d.get("clientSortOrder"))
+                                        .append(',').append("\"clientQuantity\":").append(d.get("clientQuantity"))
+                                        .append('}');
+                            }
+                            details.append(']');
+                        }
+                        details.append('}');
+                        out.write("{\"error\":\"套餐" + mreq.menuId + "不匹配\",\"details\":" + details.toString() + "}");
+                        return;
                     }
                 } else {
                     for (ItemReq cli : mreq.items) {
@@ -438,6 +483,8 @@ public class OrdersResourceApiServlet extends HttpServlet {
         @SerializedName("menuId") Integer menuId;
         @SerializedName("quantity") Integer quantity;
         @SerializedName("items") java.util.List<ItemReq> items;
+        @SerializedName("menuVersion") String menuVersion;
+        @SerializedName("menuSignature") String menuSignature;
     }
     static class ItemReq {
         @SerializedName("dishId") Integer dishId;
@@ -549,6 +596,35 @@ public class OrdersResourceApiServlet extends HttpServlet {
         }
     }
 
+    private String computeMenuSignature(Connection conn, int menuId) throws SQLException {
+        PreparedStatement ps = null; ResultSet rs = null;
+        try {
+            ps = conn.prepareStatement("SELECT dish_id, sort_order, quantity, price FROM menu_items WHERE menu_id = ? ORDER BY sort_order, menu_item_id");
+            ps.setInt(1, menuId);
+            rs = ps.executeQuery();
+            StringBuilder sb = new StringBuilder();
+            while (rs.next()) {
+                sb.append(rs.getInt(1)).append('|')
+                        .append(rs.getInt(2)).append('|')
+                        .append(rs.getInt(3)).append('|')
+                        .append(rs.getBigDecimal(4)).append(';');
+            }
+            return sha256Hex(sb.toString());
+        } finally {
+            DBUtil.close(null, ps, rs);
+        }
+    }
+
+    private static String sha256Hex(String input) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] bytes = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : bytes) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) { return ""; }
+    }
+
     private java.util.List<Order> fetchOrdersForUser(int userId) throws SQLException {
         Connection conn = null;
         PreparedStatement ostmt = null;
@@ -559,6 +635,76 @@ public class OrdersResourceApiServlet extends HttpServlet {
             conn = DBUtil.getConnection();
             ostmt = conn.prepareStatement("SELECT order_id, user_id, restaurant_id, total_price, status, order_time FROM orders WHERE user_id = ? ORDER BY order_time DESC");
             ostmt.setInt(1, userId);
+            ors = ostmt.executeQuery();
+            java.util.List<Order> orders = new java.util.ArrayList<>();
+            java.util.List<Integer> orderIds = new java.util.ArrayList<>();
+            java.util.Map<Integer, Order> map = new java.util.HashMap<>();
+            while (ors.next()) {
+                Order order = new Order();
+                order.setOrderId(ors.getInt("order_id"));
+                order.setUserId(ors.getInt("user_id"));
+                order.setRestaurantId(ors.getInt("restaurant_id"));
+                order.setTotalPrice(ors.getBigDecimal("total_price"));
+                order.setStatus(ors.getString("status"));
+                try { order.setCreatedAt(ors.getTimestamp("order_time")); } catch (Exception ignored) {}
+                orders.add(order);
+                orderIds.add(order.getOrderId());
+                map.put(order.getOrderId(), order);
+            }
+            if (orderIds.isEmpty()) return orders;
+            StringBuilder in = new StringBuilder();
+            for (int i = 0; i < orderIds.size(); i++) { if (i > 0) in.append(','); in.append('?'); }
+            istmt = conn.prepareStatement("SELECT oi.item_id, oi.order_id, oi.menu_id, oi.dish_id, oi.quantity, oi.unit_price, d.name AS dish_name, m.name AS menu_name FROM order_items oi JOIN dishes d ON oi.dish_id = d.dish_id LEFT JOIN menus m ON oi.menu_id = m.menu_id WHERE oi.order_id IN (" + in + ") ORDER BY oi.item_id");
+            for (int i = 0; i < orderIds.size(); i++) istmt.setInt(i + 1, orderIds.get(i));
+            irs = istmt.executeQuery();
+            while (irs.next()) {
+                OrderItem it = new OrderItem();
+                it.setItemId(irs.getInt("item_id"));
+                it.setOrderId(irs.getInt("order_id"));
+                it.setMenuId(irs.getInt("menu_id"));
+                it.setDishId(irs.getInt("dish_id"));
+                it.setQuantity(irs.getInt("quantity"));
+                it.setUnitPrice(irs.getBigDecimal("unit_price"));
+                it.setDishName(irs.getString("dish_name"));
+                it.setMenuName(irs.getString("menu_name"));
+                Order o = map.get(it.getOrderId());
+                if (o != null) {
+                    if (o.getItems() == null) o.setItems(new java.util.ArrayList<>());
+                    o.getItems().add(it);
+                }
+            }
+            return orders;
+        } finally {
+            if (irs != null) try { irs.close(); } catch (SQLException ignored) {}
+            if (istmt != null) try { istmt.close(); } catch (SQLException ignored) {}
+            DBUtil.close(conn, ostmt, ors);
+        }
+    }
+
+    private java.util.List<Order> fetchOrdersForUserPaged(int userId, int page, int size, String status, String from, String to) throws SQLException {
+        Connection conn = null;
+        PreparedStatement ostmt = null;
+        PreparedStatement istmt = null;
+        ResultSet ors = null;
+        ResultSet irs = null;
+        try {
+            conn = DBUtil.getConnection();
+            StringBuilder sql = new StringBuilder("SELECT order_id, user_id, restaurant_id, total_price, status, order_time FROM orders WHERE user_id = ? ");
+            java.util.List<Object> params = new java.util.ArrayList<>();
+            params.add(userId);
+            if (status != null && !status.isEmpty()) { sql.append(" AND status = ? "); params.add(status); }
+            if (from != null && !from.isEmpty()) { sql.append(" AND order_time >= ? "); params.add(java.sql.Timestamp.valueOf(from.replace('T', ' ') )); }
+            if (to != null && !to.isEmpty()) { sql.append(" AND order_time <= ? "); params.add(java.sql.Timestamp.valueOf(to.replace('T', ' ') )); }
+            sql.append(" ORDER BY order_time DESC LIMIT ? OFFSET ?");
+            params.add(size);
+            params.add(page * size);
+            ostmt = conn.prepareStatement(sql.toString());
+            for (int i = 0; i < params.size(); i++) {
+                Object v = params.get(i);
+                if (v instanceof Integer) ostmt.setInt(i + 1, (Integer)v);
+                else if (v instanceof java.sql.Timestamp) ostmt.setTimestamp(i + 1, (java.sql.Timestamp)v);
+                else ostmt.setString(i + 1, String.valueOf(v));
+            }
             ors = ostmt.executeQuery();
             java.util.List<Order> orders = new java.util.ArrayList<>();
             java.util.List<Integer> orderIds = new java.util.ArrayList<>();

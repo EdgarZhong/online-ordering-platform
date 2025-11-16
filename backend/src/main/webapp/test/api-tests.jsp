@@ -121,5 +121,13 @@
     <pre id="out11"></pre>
 </div>
 
+<div class="endpoint">
+    <div>
+        <b>GET</b> 订单分页与筛选
+        <button onclick="fetch('<%=request.getContextPath()%>/api/orders?page=0&size=5&sort=createdAt,DESC').then(r=>{document.getElementById('out12').textContent='X-Page='+r.headers.get('X-Page')+'\nX-Size='+r.headers.get('X-Size');return r.text()}).then(t=>document.getElementById('out12').textContent+=('\n'+t))">查询第一页</button>
+    </div>
+    <pre id="out12"></pre>
+</div>
+
 </body>
 </html>

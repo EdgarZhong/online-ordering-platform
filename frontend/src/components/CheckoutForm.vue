@@ -34,6 +34,10 @@ async function submit() {
       window.location.href = `http://localhost:8080/online_ordering_backend_war_exploded/login.jsp?redirect=${ret}`
       return
     }
+    if (e.response && e.response.status === 409) {
+      window.alert('下单失败：菜单已变更，请刷新页面')
+      return
+    }
     error.value = '提交失败'
   } finally {
     submitting.value = false
