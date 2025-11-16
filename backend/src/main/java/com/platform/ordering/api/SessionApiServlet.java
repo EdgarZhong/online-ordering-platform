@@ -1,16 +1,17 @@
 package com.platform.ordering.api;
 
-import com.google.gson.Gson;
-import com.platform.ordering.model.User;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+
+import com.google.gson.Gson;
+import com.platform.ordering.model.User;
 
 @WebServlet("/api/session")
 public class SessionApiServlet extends HttpServlet {
@@ -39,4 +40,5 @@ public class SessionApiServlet extends HttpServlet {
         data.put("restaurantId", user.getRestaurantId());
         resp.getWriter().write(gson.toJson(data));
     }
+
 }

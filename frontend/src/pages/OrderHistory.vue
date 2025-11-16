@@ -9,7 +9,7 @@
         <div v-else>
           <div v-for="o in sortedOrders" :key="o.orderId" class="card order-card" @click="go(o.orderId)">
             <div class="row">
-              <div class="restaurant text-menu-name">{{ o.restaurantName }}</div>
+              <div class="restaurant text-menu-name">{{ o.restaurantName }}：{{ o.serialNumber }}</div>
               <div class="price text-price">￥{{ Number(o.totalPrice).toFixed(2) }}</div>
             </div>
             <div class="row">

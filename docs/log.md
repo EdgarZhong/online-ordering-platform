@@ -1,4 +1,72 @@
 # 开发日志
+## 2025-11-16 - by 钟丞（登录路由与跨域会话修复、配置统一）
+
+### 问题与根因
+- 消费者登录后无法回到前端深链；直接登录后也未跳至前端首页。
+- 登录成功后前端在 `http://localhost:5173/` 无法加载餐厅/订单数据，跨源 XHR 不携带会话导致 401。
+- 根因：
+  - `AuthFilter` 重定向登录页不携带原始目标 `redirect`；`LoginServlet` 未限制消费者跳后台路径。
+  - 跨域会话默认 `SameSite=Lax`，跨站 XHR 不附带 `JSESSIONID`；多数 API 未统一返回 CORS 允许头。
+  - 前后端存在地址回退与硬编码，环境切换需要改动多处。
+
+### 修复与统一配置
+- 路由与回跳：
+  - `AuthFilter` 将未登录/权限不足访问重定向到 `login.jsp?redirect=<原目标>`（URL 编码）。位置：`backend/src/main/java/com/platform/ordering/filter/AuthFilter.java:80-89`。
+  - `LoginServlet` 读取 `redirect`，白名单允许回跳到前端（`consumerDefaultRedirect` 前缀）或本应用内路径；消费者禁止跳 `/admin/*`。位置：`backend/src/main/java/com/platform/ordering/controller/LoginServlet.java:47-74`。
+- 跨域会话：
+  - 登录成功后设置 `JSESSIONID` 为 `SameSite=None`，HTTPS 下附加 `Secure`。位置：`backend/src/main/java/com/platform/ordering/controller/LoginServlet.java:39-45`。
+- CORS 统一：
+  - 新增 `CorsFilter` 覆盖 `/api/*`，允许凭据、预检并暴露头（`X-Page/X-Size/X-Menu-Version/X-Menu-Signature/ETag`）。位置：`backend/src/main/java/com/platform/ordering/filter/CorsFilter.java:1`。
+  - 允许来源改为从 `web.xml` 读取 `context-param: corsAllowedOrigin`，不再硬编码。配置：`backend/src/main/webapp/WEB-INF/web.xml:13-16`。
+- 字符编码与过滤器映射：
+  - `CharacterEncodingFilter` 仅设置响应编码，不覆盖 `Content-Type`。位置：`backend/src/main/java/com/platform/ordering/filter/CharacterEncodingFilter.java:30-34`。
+  - 过滤器统一由 `web.xml` 映射，移除类上的注解以避免重复执行。映射见：`backend/src/main/webapp/WEB-INF/web.xml:24-42`。
+- 前端配置统一：
+  - 移除 `window.location.origin` 等地址回退，统一从 `.env` 读取后端地址：`frontend/src/router/index.js:20-23`，`frontend/src/api/index.js:3-8`。
+  - 现有 `.env` 示例：`VITE_BACKEND_BASE=http://localhost:8080/online_ordering_backend_war_exploded`、`VITE_API_BASE=.../api`。
+
+### 生产环境配置指引
+- 仅需修改两处配置即可完成环境切换：
+  - 后端：`backend/src/main/webapp/WEB-INF/web.xml`
+    - `consumerDefaultRedirect` → 前端根地址（如 `https://app.example.com/`）
+    - `corsAllowedOrigin` → 前端来源（如 `https://app.example.com`）
+  - 前端：`frontend/.env`
+    - `VITE_BACKEND_BASE` 与 `VITE_API_BASE` 指向后端域名（如 `https://api.example.com` 与 `https://api.example.com/api`）
+- 若生产采用同源部署，可将前端通过反向代理挂载到同域下，`corsAllowedOrigin` 可与后端同域，甚至关闭 CORS 映射。
+
+### 验收要点
+- 登录场景：
+  - 消费者深链被重定向登录后，成功回到原始前端页面（A-1）；直接访问登录页后回到前端首页（A-2）。
+  - 商户与超级管理员按角色进入后台，消费者无法被引导到后台路径（B-1/B-2）。
+- 前端数据加载：
+  - `GET /api/session` 返回用户信息；`GET /api/restaurants`、`GET /api/menus/:id/items`、`GET /api/orders` 正常返回 JSON。
+  - 响应头包含 `Access-Control-Allow-Origin`（等于 `web.xml` 的 `corsAllowedOrigin`）与 `Access-Control-Allow-Credentials: true`；菜单接口暴露版本/签名头。
+- 登录失败保留 `redirect` 参数，便于重试：`backend/src/main/java/com/platform/ordering/controller/LoginServlet.java:76-81,87-91`。
+
+---
+## 2025-11-16 - by 钟丞（消费者端订单管理增强与串联商户刷新）
+
+### 增量内容
+
+- 订单字段与展示：
+  - 列表与详情 `items[]` 增加 `dishId`；顶层增加 `serialNumber`（每日餐厅流水号）。
+  - 历史订单卡片标题改为“餐厅名称：流水号”；详情页顶部最大字号显示“流水号：xx”，其下按钮显示餐厅名称并可跳转点单页；“订单id”字样替换。
+- 再次购买与购物车：
+  - 再次购买前先清空当前餐厅购物车；重新获取菜单与菜品，仅保留仍存在的内容；非套餐支持按 `dishId` 优先、`dishName` 回退匹配；数量统一下限 1。
+- 取消订单：
+  - 新增消费者接口 `POST /api/orders/{orderId}/cancel`，仅允许取消 `PENDING` 状态；并在商户端通过 SSE `order_updated` 自动刷新厨房面板。
+- API 文档补充：
+  - 下单契约改为“菜单维度”（含 `menus[].items[].sortOrder/quantity`）；订单列表 `GET /api/orders` 支持分页与筛选；订单详情返回 `menus[]` 分组；SSE 事件说明。
+
+### 代码位置
+- 后端：`backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java`（字段增补、取消接口、列表分页头）；`util/KitchenEventBus.java`（`order_updated`）。
+- 前端：`frontend/src/pages/OrderDetail.vue`（取消/再次购买/流水号与餐厅按钮）；`frontend/src/pages/OrderHistory.vue`（卡片标题显示流水号）；`frontend/src/stores/cart.js`（清空与重建、数量下限）；`frontend/src/api/index.js`（取消接口）。
+- 文档：`docs/API.md`（契约与字段补充）。
+
+### 验收要点
+- 再次购买能够在菜单变更后仅保留有效项，并准确计价；取消成功后消费者端状态变化立刻可见，商户厨房面板自动刷新；历史与详情页显示的流水号一致且可跳转餐厅页。
+
+---
 ## 2025-11-16 - by 钟丞（商户端订单管理与厨房面板）
 
 ### 本次工作汇总

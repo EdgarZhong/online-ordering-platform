@@ -18,6 +18,7 @@ import javax.servlet.http.HttpSession;
 
 import com.platform.ordering.dao.OrderAdminDAO;
 import com.platform.ordering.dao.OrderAdminDAOImpl;
+import com.platform.ordering.util.KitchenEventBus;
 import com.platform.ordering.model.Order;
 import com.platform.ordering.model.User;
 
@@ -77,6 +78,7 @@ public class KitchenBoardServlet extends HttpServlet {
                     resp.sendError(HttpServletResponse.SC_CONFLICT, "状态流转不合法或订单不可更新");
                     return;
                 }
+                try { KitchenEventBus.get().publishOrderUpdated(restaurantId, orderId, newStatus); } catch (Exception ignored) {}
                 resp.sendRedirect(req.getContextPath() + "/admin/kitchen");
             } catch (Exception e) {
                 throw new ServletException("订单状态更新失败", e);

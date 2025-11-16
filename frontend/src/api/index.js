@@ -1,17 +1,23 @@
 import axios from 'axios'
 
+const BACKEND_BASE = import.meta.env.VITE_BACKEND_BASE
+
+const API_BASE = import.meta.env.VITE_API_BASE || `${BACKEND_BASE}/api`
+
 const instance = axios.create({
-  baseURL: '/online_ordering_backend_war_exploded/api',
+  baseURL: API_BASE,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 })
+
+const BACKEND_BASE_FOR_REDIRECT = BACKEND_BASE
 
 instance.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response && err.response.status === 401) {
       const ret = encodeURIComponent(window.location.href)
-      window.location.href = `http://localhost:8080/online_ordering_backend_war_exploded/login.jsp?redirect=${ret}`
+      window.location.href = `${BACKEND_BASE_FOR_REDIRECT}/login.jsp?redirect=${ret}`
       return Promise.reject(err)
     }
     return Promise.reject(err)

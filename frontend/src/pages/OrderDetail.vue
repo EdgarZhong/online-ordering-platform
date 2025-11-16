@@ -8,7 +8,9 @@
         <button v-if="order.status==='PENDING'" class="btn-cancel" @click="onCancel">取消订单</button>
         <button class="btn-reorder" @click="onReorder">再次购买</button>
       </div>
-      <h2>订单 {{ order.orderId }}</h2>
+      <h1 class="title">流水号：{{ order.serialNumber }}</h1>
+      <button class="btn-restaurant" @click="gotoRestaurant">{{ order.restaurantName }}</button>
+      <p>订单id：{{ order.orderId }}</p>
       <p>状态：{{ order.status }} · 金额：￥{{ order.totalPrice }}</p>
       <p>时间：{{ order.createdAt }}</p>
       <h3>明细</h3>
@@ -43,7 +45,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getOrder, cancelOrder, getMenuItems } from '../api'
+import { getOrder, cancelOrder, getMenuItems, getMenus } from '../api'
 import { useCartStore } from '../stores/cart'
 
 const route = useRoute()
@@ -60,7 +62,11 @@ onMounted(async () => {
   } catch (e) {
     if (e.response && e.response.status === 401) {
       const ret = encodeURIComponent(window.location.href)
-      window.location.href = `http://localhost:8080/online_ordering_backend_war_exploded/login.jsp?redirect=${ret}`
+      const BACKEND_BASE = (
+        import.meta.env.VITE_BACKEND_BASE
+        || (window.location.origin + (import.meta.env.VITE_BACKEND_CONTEXT || ''))
+      )
+      window.location.href = `${BACKEND_BASE}/login.jsp?redirect=${ret}`
       return
     }
     error.value = '加载失败'
@@ -70,6 +76,7 @@ onMounted(async () => {
 })
 
 function back() { router.push('/orders/history') }
+function gotoRestaurant() { if (order.value && order.value.restaurantId) router.push(`/restaurants/${order.value.restaurantId}`) }
 
 function sortItems(m) {
   return (m.items || []).slice().sort((a,b) => (a.sortOrder || 0) - (b.sortOrder || 0))
@@ -89,27 +96,60 @@ async function onReorder() {
   const rid = order.value.restaurantId
   if (!rid) { error.value = '无法识别餐厅'; return }
   try {
+    cart.clearCart(rid)
+    let currentMenus = []
+    try { currentMenus = await getMenus(rid) } catch (e) { currentMenus = [] }
+    const menuMap = new Map(currentMenus.map(m => [m.menuId, m]))
+    const desiredQtyByMenu = {}
     if (order.value.menus && order.value.menus.length) {
-      for (const m of order.value.menus) {
-        if (m.isPackage) {
-          const res = await getMenuItems(m.menuId)
-          const mapped = (res.items || []).map(it => ({
-            dishId: it.dishId,
-            sortOrder: it.sortOrder || 0,
-            quantity: it.defaultQuantity || it.quantity || 1,
-            name: it.name,
-            price: it.price
-          }))
-          cart.addPackage(rid, m.menuId, mapped, m.menuQuantity || 1, m.menuName, { version: res.version, signature: res.signature })
-        } else {
-          for (const it of (m.items || [])) {
-            cart.addItem(rid, m.menuId, { dishId: it.dishId, sortOrder: it.sortOrder || 0, quantity: it.quantity, name: it.dishName, price: it.unitPrice }, m.menuName)
-          }
-        }
-      }
-    } else if (order.value.items && order.value.items.length) {
+      for (const m of order.value.menus) { desiredQtyByMenu[m.menuId] = m.menuQuantity || 0 }
+    }
+    const itemsByMenu = {}
+    if (order.value.items && order.value.items.length) {
       for (const it of order.value.items) {
-        cart.addItem(rid, it.menuId, { dishId: it.dishId, sortOrder: 0, quantity: it.quantity, name: it.dishName, price: it.unitPrice }, it.menuName)
+        if (!it.menuId) continue
+        (itemsByMenu[it.menuId] ||= []).push(it)
+      }
+    }
+    const menuIds = Array.from(new Set([...
+      Object.keys(desiredQtyByMenu).map(x => Number(x)),
+      ...Object.keys(itemsByMenu).map(x => Number(x))
+    ]))
+    for (const mid of menuIds) {
+      if (!menuMap.has(mid)) continue
+      const curMenu = menuMap.get(mid)
+      const res = await getMenuItems(mid)
+      if (curMenu.isPackage) {
+        let qty = desiredQtyByMenu[mid] || 0
+        if (!qty || qty <= 0) {
+          let calc = null
+          const byDish = new Map((res.items || []).map(x => [x.dishId, x]))
+          const list = itemsByMenu[mid] || []
+          for (const it of list) {
+            const cur = byDish.get(it.dishId)
+            if (!cur) continue
+            const dq = cur.defaultQuantity || cur.quantity || 0
+            if (!dq) continue
+            const v = Math.floor((it.quantity || 0) / dq)
+            calc = calc == null ? v : Math.min(calc, v)
+          }
+          qty = calc && calc > 0 ? calc : 1
+        }
+        const mapped = (res.items || []).map(x => ({ dishId: x.dishId, sortOrder: x.sortOrder || 0, quantity: x.defaultQuantity || x.quantity || 1, name: x.name, price: x.price }))
+        if (mapped.length > 0) cart.addPackage(rid, mid, mapped, qty, curMenu.name || '', { version: res.version, signature: res.signature })
+      } else {
+        const byDish = new Map((res.items || []).map(x => [x.dishId, x]))
+        const byName = new Map((res.items || []).map(x => [x.name, x]))
+        const list = itemsByMenu[mid] || []
+        for (const it of list) {
+          let cur = null
+          if (it.dishId !== undefined && it.dishId !== null) cur = byDish.get(it.dishId)
+          if (!cur && it.dishName) cur = byName.get(it.dishName)
+          if (!cur) continue
+          const qty = Math.max(1, parseInt(it.quantity || 0))
+          const dishId = cur.dishId !== undefined ? cur.dishId : it.dishId
+          cart.addItem(rid, mid, { dishId: dishId, sortOrder: cur.sortOrder || 0, quantity: qty, name: it.dishName, price: cur.price || it.unitPrice }, curMenu.name || '')
+        }
       }
     }
     router.push(`/restaurants/${rid}`)
@@ -137,4 +177,5 @@ li { padding: 4px 0; }
 .actions { display: flex; gap: 8px; margin-bottom: 8px; }
 .btn-cancel { background: #dc3545; color: #fff; border: none; padding: 6px 10px; border-radius: 4px; }
 .btn-reorder { background: #0d6efd; color: #fff; border: none; padding: 6px 10px; border-radius: 4px; }
+.btn-restaurant { background: #198754; color: #fff; border: none; padding: 6px 10px; border-radius: 4px; margin: 4px 0 8px; }
 </style>

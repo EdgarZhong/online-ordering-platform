@@ -166,21 +166,21 @@
 #### 3.5 创建订单 (下单)
 
 - **Endpoint**: `POST /api/orders`
-- **描述**: 消费者提交购物车内容，创建新订单。**需要用户登录**。
+- **描述**: 消费者提交购物车内容，创建新订单。**需要用户登录**。当前契约以“菜单维度”组织，支持套餐严格校验与计价。
 - **请求体 (Request Body)**:
   ```json
   {
     "restaurantId": 1,
-    "items": [
+    "menus": [
       {
         "menuId": 2,
-        "dishId": 101,
-        "quantity": 1
-      },
-      {
-        "menuId": 2,
-        "dishId": 102,
-        "quantity": 2
+        "quantity": 1,
+        "items": [
+          { "dishId": 101, "sortOrder": 1, "quantity": 1 },
+          { "dishId": 102, "sortOrder": 2, "quantity": 2 }
+        ],
+        "menuVersion": "v1",
+        "menuSignature": "abc..."
       }
     ]
   }
@@ -202,7 +202,7 @@
   }
   ```
 - **校验与规则**:
-  - 每个 `item` 必须提供 `menuId` 与 `dishId`；以 `menu_items` 中该组合的 `price` 为准
+  - 每个 `item` 必须提供 `dishId`（非套餐还需提供数量）；以 `menu_items` 中该菜单的 `price` 为准
   - `menuId` 必须属于 `restaurantId`；否则拒绝（`400`）
   - 同一餐厅中允许菜品在多个菜单出现；下单以用户选择菜单的价格计算
   - `totalPrice` 服务端计算，不接受客户端传入
@@ -218,11 +218,14 @@
 - **请求参数**: 无
 - **响应字段**:
   - `orderId` (int) 订单ID
+  - `restaurantId` (int) 餐厅ID
   - `restaurantName` (string) 餐厅名称
+  - `serialNumber` (int) 当日餐厅内流水号
   - `status` (string) 订单状态（见下方枚举）
   - `totalPrice` (number) 总价
   - `createdAt` (string) 下单时间（服务器时间）
-  - `items` (array) 订单明细：`menuId`、`menuName`、`dishName`、`quantity`、`unitPrice`
+  - `items` (array) 订单明细：`menuId`、`menuName`、`dishId`、`dishName`、`quantity`、`unitPrice`
+  - `menus` (array) 分组信息：`menuId/menuName/isPackage/menuQuantity/menuUnitPrice/menuTotalPrice/items[perPackageQuantity/sortOrder]`
 - **成功响应 (200 OK)**:
   ```json
   {
@@ -261,7 +264,7 @@
   }
   ```
 - **状态枚举 (Status Enum)**:
-  - `PENDING`, `CONFIRMED`, `PREPARING`, `READY_FOR_PICKUP`, `COMPLETED`, `CANCELLED`
+  - `PENDING`, `PROCESSING`, `COMPLETED`, `CANCELLED`
  - **curl 示例**:
    ```bash
    curl -s -b "JSESSIONID=..." \
@@ -287,6 +290,7 @@
 - Order → `orders`
   - `order_id` → `orderId`
   - `user_id`, `restaurant_id`, `total_price`, `status`, `order_time` → `createdAt`
+  - `serialNumber` 为运行时计算字段（按“每日/餐厅”有序号），非持久化列
 - OrderItem → `order_items` JOIN `dishes`
   - `dish_name` (from `dishes.name`) → `dishName`
   - `quantity`, `unit_price`
@@ -355,3 +359,26 @@ curl -s -X POST \
   -d '{"restaurantId":1,"items":[{"menuId":1,"dishId":1,"quantity":1},{"menuId":1,"dishId":3,"quantity":2}]}' \
   "http://localhost:8080/{context}/api/orders"
 ```
+#### 3.7 查询历史订单列表
+
+- **Endpoint**: `GET /api/orders`
+- **描述**: 获取当前用户的订单列表，支持分页与筛选。
+- **查询参数**: `page`(默认0), `size`(默认20), `status`(可选), `from`/`to`(时间范围)
+- **响应头**: `X-Page`, `X-Size`
+- **响应体**: 数组。每项包含 `restaurantId/orderId/restaurantName/serialNumber/status/totalPrice/createdAt/items[]`（items 内含 `dishId/dishName/menuId/menuName/quantity/unitPrice`）。
+
+#### 3.8 取消订单
+
+- **Endpoint**: `POST /api/orders/{orderId}/cancel`
+- **描述**: 取消当前用户的某个订单，仅当状态为 `PENDING`。
+- **成功响应 (200 OK)**:
+  ```json
+  { "orderId": 5001, "status": "CANCELLED" }
+  ```
+- **错误响应**:
+  - `404`：订单不存在或无权限
+  - `409`：订单已被他人更新，无法取消
+## 8. 附：商户端事件推送（SSE）
+- 端点：`GET /admin/kitchen/events`
+- 事件：`new_order`（新订单创建）、`order_updated`（订单状态变更）
+- 客户端：`EventSource` 监听上述事件并刷新厨房面板。

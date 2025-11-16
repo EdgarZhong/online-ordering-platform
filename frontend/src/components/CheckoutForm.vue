@@ -23,6 +23,16 @@ async function submit() {
   error.value = ''
   const payload = cart.toOrderPayload(props.restaurantId)
   if (!payload.menus.length) { error.value = '购物车为空'; return }
+  try {
+    const cleanedMenus = []
+    for (const m of payload.menus) {
+      if ((m.quantity || 0) > 0) { cleanedMenus.push(m); continue }
+      const items = (m.items || []).filter(it => (it.quantity || 0) > 0)
+      if (items.length > 0) cleanedMenus.push({ ...m, items })
+    }
+    payload.menus = cleanedMenus
+    if (!payload.menus.length) { error.value = '购物车为空'; return }
+  } catch (_) {}
   submitting.value = true
   try {
     const res = await createOrder(payload)
@@ -31,7 +41,15 @@ async function submit() {
   } catch (e) {
     if (e.response && e.response.status === 401) {
       const ret = encodeURIComponent(window.location.href)
-      window.location.href = `http://localhost:8080/online_ordering_backend_war_exploded/login.jsp?redirect=${ret}`
+      const BACKEND_BASE = (
+        import.meta.env.VITE_BACKEND_BASE
+        || (window.location.origin + (import.meta.env.VITE_BACKEND_CONTEXT || ''))
+      )
+      window.location.href = `${BACKEND_BASE}/login.jsp?redirect=${ret}`
+      return
+    }
+    if (e.response && e.response.data && e.response.data.error) {
+      window.alert('下单失败：' + e.response.data.error)
       return
     }
     if (e.response && e.response.status === 409) {

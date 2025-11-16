@@ -12,6 +12,7 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.net.URLEncoder;
 
 @WebServlet("/login")
 public class LoginServlet extends HttpServlet {
@@ -35,19 +36,31 @@ public class LoginServlet extends HttpServlet {
                 HttpSession session = req.getSession();
                 // 2. 将完整的用户信息存入Session，以便后续使用
                 session.setAttribute("user", user);
+                String ctxForCookie = req.getContextPath();
+                String cookie = "JSESSIONID=" + session.getId() + "; Path=" + ctxForCookie + "; HttpOnly; SameSite=None";
+                if (req.isSecure()) {
+                    cookie += "; Secure";
+                }
+                resp.addHeader("Set-Cookie", cookie);
 
                 // 3. 根据角色重定向到不同页面
                 if (redirect != null && !redirect.isEmpty()) {
                     boolean allowed = false;
+                    String ctx = req.getContextPath();
+                    String role = user.getRole();
                     if (consumerDefaultRedirect != null && redirect.startsWith(consumerDefaultRedirect)) {
                         allowed = true;
                     }
-                    if (redirect.startsWith(req.getContextPath() + "/")) {
+                    if (redirect.startsWith(ctx + "/")) {
                         allowed = true;
                     }
                     if (allowed) {
-                        resp.sendRedirect(redirect);
-                        return;
+                        if (redirect.startsWith(ctx + "/admin/") && !("merchant".equals(role) || "superadmin".equals(role))) {
+                            // 非后台角色不允许跳转到后台路径
+                        } else {
+                            resp.sendRedirect(redirect);
+                            return;
+                        }
                     }
                 }
                 if ("merchant".equals(user.getRole()) || "superadmin".equals(user.getRole())) {
@@ -61,13 +74,21 @@ public class LoginServlet extends HttpServlet {
                 }
             } else {
                 // 登录失败，重定向回登录页并附带错误提示
-                resp.sendRedirect(req.getContextPath() + "/login.jsp?error=invalidCredentials");
+                String url = req.getContextPath() + "/login.jsp?error=invalidCredentials";
+                if (redirect != null && !redirect.isEmpty()) {
+                    url += "&redirect=" + URLEncoder.encode(redirect, "UTF-8");
+                }
+                resp.sendRedirect(url);
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
             // 数据库异常，同样视为登录失败
-            resp.sendRedirect(req.getContextPath() + "/login.jsp?error=invalidCredentials");
+            String url = req.getContextPath() + "/login.jsp?error=invalidCredentials";
+            if (redirect != null && !redirect.isEmpty()) {
+                url += "&redirect=" + URLEncoder.encode(redirect, "UTF-8");
+            }
+            resp.sendRedirect(url);
         }
     }
 }

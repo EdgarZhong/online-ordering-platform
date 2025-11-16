@@ -1,18 +1,20 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-const backendTarget = 'http://localhost:8080'
-const context = '/online_ordering_backend_war_exploded'
-
-export default defineConfig({
-  plugins: [vue()],
-  server: {
-    port: 5173,
-    proxy: {
-      [`${context}/api`]: {
-        target: backendTarget,
-        changeOrigin: true
-      }
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const backendTarget = env.VITE_BACKEND_TARGET
+  const backendContext = env.VITE_BACKEND_CONTEXT
+  return {
+    plugins: [vue()],
+    server: {
+      port: Number(env.VITE_DEV_PORT || 5173),
+      proxy: backendTarget && backendContext ? {
+        [`${backendContext}/api`]: {
+          target: backendTarget,
+          changeOrigin: true
+        }
+      } : {}
     }
   }
 })

@@ -10,6 +10,10 @@
         <param-name>consumerDefaultRedirect</param-name>
         <param-value>http://localhost:5173/</param-value>
     </context-param>
+    <context-param>
+        <param-name>corsAllowedOrigin</param-name>
+        <param-value>http://localhost:5173</param-value>
+    </context-param>
 
     <!-- 1. 字符编码过滤器配置 -->
     <filter>
@@ -29,6 +33,16 @@
     <filter-mapping>
         <filter-name>AuthFilter</filter-name>
         <url-pattern>/admin/*</url-pattern> <!-- 仅保护/admin/路径下的资源 -->
+    </filter-mapping>
+
+    <!-- 3. CORS 过滤器，允许前端跨域访问 /api/* -->
+    <filter>
+        <filter-name>CorsFilter</filter-name>
+        <filter-class>com.platform.ordering.filter.CorsFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>CorsFilter</filter-name>
+        <url-pattern>/api/*</url-pattern>
     </filter-mapping>
 
     <!-- 欢迎页面 -->

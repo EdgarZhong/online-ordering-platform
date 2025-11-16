@@ -12,7 +12,11 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     logout() {
-      window.location.href = 'http://localhost:8080/online_ordering_backend_war_exploded/logout'
+      const BACKEND_BASE = (
+        import.meta.env.VITE_BACKEND_BASE
+        || (window.location.origin + (import.meta.env.VITE_BACKEND_CONTEXT || ''))
+      )
+      window.location.href = `${BACKEND_BASE}/logout`
     }
   }
 })

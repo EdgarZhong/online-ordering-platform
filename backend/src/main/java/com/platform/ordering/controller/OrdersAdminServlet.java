@@ -17,6 +17,7 @@ import com.platform.ordering.dao.OrderAdminDAO;
 import com.platform.ordering.dao.OrderAdminDAOImpl;
 import com.platform.ordering.model.Order;
 import com.platform.ordering.model.User;
+import com.platform.ordering.util.KitchenEventBus;
 
 /**
  * 商家端订单管理控制器
@@ -157,6 +158,7 @@ public class OrdersAdminServlet extends HttpServlet {
                     resp.sendError(HttpServletResponse.SC_CONFLICT, "状态流转不合法或订单不可更新");
                     return;
                 }
+                try { KitchenEventBus.get().publishOrderUpdated(restaurantId, orderId, newStatus); } catch (Exception ignored) {}
                 resp.sendRedirect(req.getContextPath() + "/admin/orders/" + orderId);
             } catch (Exception e) {
                 throw new ServletException("订单状态更新失败", e);

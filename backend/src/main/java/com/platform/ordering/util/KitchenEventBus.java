@@ -50,4 +50,18 @@ public class KitchenEventBus {
             } catch (Exception ignored) {}
         }
     }
+
+    public void publishOrderUpdated(int restaurantId, int orderId, String status) {
+        List<Subscriber> list;
+        synchronized (subs) { list = subs.get(restaurantId) == null ? null : new ArrayList<>(subs.get(restaurantId)); }
+        if (list == null || list.isEmpty()) return;
+        for (Subscriber s : list) {
+            try {
+                s.writer.println("event: order_updated");
+                s.writer.println("data: {\"orderId\":" + orderId + ",\"status\":\"" + (status == null ? "" : status) + "\"}");
+                s.writer.println();
+                s.writer.flush();
+            } catch (Exception ignored) {}
+        }
+    }
 }

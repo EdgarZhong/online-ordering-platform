@@ -1,7 +1,7 @@
 # Final大作业项目规划与技术选型
 
 **请你们查看 [当前阶段项目说明](docs/CurrentStageProjectGuide.md)**
-
+**前往[路径配置文件教程](docs/path-and-environment-variables.md)**
 ### 1. 项目概述
 本项目为“网上订餐系统”，根据课程要求，分为两大模块：
 - **系统管理模块**：供管理员使用，负责管理菜品、订单、用户等。
@@ -18,7 +18,7 @@
   - **视图 (View)**: `JSP` + `JSTL` + `EL` + **自定义标签 (Custom Tags)**。
   - **数据持久化**: `JDBC` + `DAO` 模式。
   - **前端样式**: `Bootstrap`。
-  - **会话管理**: `Session` + `Cookie`。
+  - **会话管理**: `Session` + `Cookie`
   - **过滤器**: `Filter` (用于编码和权限控制)。
 
 #### B. 客户端模块（User Frontend）

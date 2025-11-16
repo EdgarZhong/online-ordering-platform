@@ -9,6 +9,7 @@
 package com.platform.ordering.filter;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
@@ -16,7 +17,6 @@ import javax.servlet.FilterConfig;
 import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
-import javax.servlet.annotation.WebFilter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
@@ -31,7 +31,6 @@ import com.platform.ordering.model.User;
  * 如果用户未登录或权限不足，则重定向到登录页面。
  * </p>
  */
-@WebFilter("/admin/*") // 仅保护/admin/目录下的所有资源
 public class AuthFilter implements Filter {
 
     @Override
@@ -63,7 +62,13 @@ public class AuthFilter implements Filter {
             if ("merchant".equals(user.getRole())) {
                 Integer restaurantId = user.getRestaurantId();
                 if (restaurantId == null) {
-                    httpResponse.sendRedirect(httpRequest.getContextPath() + "/login.jsp");
+                    String target = httpRequest.getRequestURI();
+                    String qs = httpRequest.getQueryString();
+                    if (qs != null) {
+                        target += "?" + qs;
+                    }
+                    String ret = URLEncoder.encode(target, "UTF-8");
+                    httpResponse.sendRedirect(httpRequest.getContextPath() + "/login.jsp?redirect=" + ret);
                     return;
                 }
                 request.setAttribute("restaurantId", restaurantId);
@@ -72,7 +77,13 @@ public class AuthFilter implements Filter {
         } else {
             // 用户未登录或权限不足，重定向到登录页面
             // 使用 httpRequest.getContextPath() 来构建正确的URL
-            httpResponse.sendRedirect(httpRequest.getContextPath() + "/login.jsp");
+            String target = httpRequest.getRequestURI();
+            String qs = httpRequest.getQueryString();
+            if (qs != null) {
+                target += "?" + qs;
+            }
+            String ret = URLEncoder.encode(target, "UTF-8");
+            httpResponse.sendRedirect(httpRequest.getContextPath() + "/login.jsp?redirect=" + ret);
         }
     }
 

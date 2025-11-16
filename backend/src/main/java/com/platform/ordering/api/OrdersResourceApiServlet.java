@@ -61,6 +61,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                             .append("\"restaurantId\":").append(o.getRestaurantId()).append(',')
                             .append("\"orderId\":").append(o.getOrderId()).append(',')
                             .append("\"restaurantName\":\"").append(escape(restaurantName)).append('\"').append(',')
+                            .append("\"serialNumber\":").append(o.getSerialNumber()).append(',')
                             .append("\"status\":\"").append(escape(o.getStatus())).append('\"').append(',')
                             .append("\"totalPrice\":").append(o.getTotalPrice()).append(',')
                             .append("\"createdAt\":\"").append(o.getCreatedAt() == null ? "" : o.getCreatedAt().toString()).append('\"').append(',')
@@ -71,6 +72,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                         OrderItem it = items.get(i);
                         if (i > 0) sb.append(',');
                         sb.append('{')
+                                .append("\"dishId\":").append(it.getDishId()).append(',')
                                 .append("\"dishName\":\"").append(escape(it.getDishName())).append('\"').append(',')
                                 .append("\"menuId\":").append(it.getMenuId()).append(',')
                                 .append("\"menuName\":\"").append(escape(it.getMenuName())).append('\"').append(',')
@@ -156,6 +158,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                     .append("\"restaurantId\":").append(order.getRestaurantId()).append(',')
                     .append("\"orderId\":").append(order.getOrderId()).append(',')
                     .append("\"restaurantName\":\"").append(escape(restaurantName)).append('\"').append(',')
+                    .append("\"serialNumber\":").append(order.getSerialNumber()).append(',')
                     .append("\"status\":\"").append(escape(order.getStatus())).append('\"').append(',')
                     .append("\"totalPrice\":").append(order.getTotalPrice()).append(',')
                     .append("\"createdAt\":\"").append(order.getCreatedAt() == null ? "" : order.getCreatedAt().toString()).append('\"').append(',')
@@ -166,6 +169,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                 OrderItem it = items.get(i);
                 if (i > 0) sb.append(',');
                 sb.append('{')
+                        .append("\"dishId\":").append(it.getDishId()).append(',')
                         .append("\"dishName\":\"").append(escape(it.getDishName())).append('\"').append(',')
                         .append("\"menuId\":").append(it.getMenuId()).append(',')
                         .append("\"menuName\":\"").append(escape(it.getMenuName())).append('\"').append(',')
@@ -225,6 +229,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                     Integer dq = defaultQtyMap.get(mid + ":" + it.getDishId());
                     Integer so = defaultQtyMap.get(mid + ":" + it.getDishId() + ":so");
                     sb.append('{')
+                            .append("\"dishId\":").append(it.getDishId()).append(',')
                             .append("\"dishName\":\"").append(escape(it.getDishName())).append('\"').append(',')
                             .append("\"unitPrice\":").append(it.getUnitPrice()).append(',')
                             .append("\"quantity\":").append(it.getQuantity()).append(',')
@@ -317,6 +322,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                 }
                 resp.setStatus(HttpServletResponse.SC_OK);
                 out.write("{\"orderId\":" + orderId + ",\"status\":\"CANCELLED\"}");
+                try { KitchenEventBus.get().publishOrderUpdated(fetchRestaurantIdByOrder(orderId), orderId, "CANCELLED"); } catch (Exception ignored) {}
                 return;
             } catch (SQLException e) {
                 resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
@@ -363,7 +369,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                 if (mreq == null || mreq.menuId == null || mreq.quantity == null || mreq.quantity < 0 || mreq.items == null) {
                     conn.rollback();
                     resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                    out.write("{\"error\":\"Invalid menu payload\"}");
+                    out.write("{\"error\":\"菜单载荷无效\",\"details\":{\"menuId\":" + (mreq == null || mreq.menuId == null ? 0 : mreq.menuId) + "}}" );
                     return;
                 }
                 boolean isPackage = isPackageMenu(conn, mreq.menuId, restaurantId);
@@ -444,7 +450,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                         if (cli == null || cli.dishId == null || cli.quantity == null || cli.quantity <= 0) {
                             conn.rollback();
                             resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                            out.write("{\"error\":\"Invalid items: quantity required\"}");
+                            out.write("{\\\"error\\\":\\\"数量必须大于0\\\",\\\"details\\\":{\\\"menuId\\\":" + mreq.menuId + ",\\\"dishId\\\":" + (cli == null || cli.dishId == null ? 0 : cli.dishId) + ",\\\"receivedQty\\\":" + (cli == null || cli.quantity == null ? 0 : cli.quantity) + "}}" );
                             return;
                         }
                         priceStmt.setInt(1, restaurantId);
@@ -454,7 +460,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                         if (!rs.next()) {
                             conn.rollback();
                             resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                            out.write("{\"error\":\"Invalid items: menuId+dishId not available under restaurant\"}");
+                            out.write("{\"error\":\"菜品已不在该菜单\",\"details\":{\"menuId\":" + mreq.menuId + ",\"dishId\":" + cli.dishId + "}}" );
                             return;
                         }
                         java.math.BigDecimal unitPrice = rs.getBigDecimal("price");
@@ -531,6 +537,20 @@ public class OrdersResourceApiServlet extends HttpServlet {
         }
     }
 
+    private int fetchRestaurantIdByOrder(int orderId) throws SQLException {
+        Connection conn = null; PreparedStatement ps = null; ResultSet rs = null;
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement("SELECT restaurant_id FROM orders WHERE order_id = ?");
+            ps.setInt(1, orderId);
+            rs = ps.executeQuery();
+            if (rs.next()) return rs.getInt(1);
+            return 0;
+        } finally {
+            DBUtil.close(conn, ps, rs);
+        }
+    }
+
     static class OrderReq {
         @SerializedName("restaurantId") Integer restaurantId;
         @SerializedName("menus") java.util.List<MenuReq> menus;
@@ -556,7 +576,10 @@ public class OrdersResourceApiServlet extends HttpServlet {
         ResultSet irs = null;
         try {
             conn = DBUtil.getConnection();
-            ostmt = conn.prepareStatement("SELECT order_id, user_id, restaurant_id, total_price, status, order_time FROM orders WHERE order_id = ? AND user_id = ?");
+            ostmt = conn.prepareStatement("SELECT order_id, user_id, restaurant_id, total_price, status, order_time, " +
+                    "(SELECT COUNT(1) FROM orders o2 WHERE o2.restaurant_id = orders.restaurant_id AND DATE(o2.order_time) = DATE(orders.order_time) " +
+                    "AND (o2.order_time < orders.order_time OR (o2.order_time = orders.order_time AND o2.order_id <= orders.order_id))) AS serial_number " +
+                    "FROM orders WHERE order_id = ? AND user_id = ?");
             ostmt.setInt(1, orderId);
             ostmt.setInt(2, userId);
             ors = ostmt.executeQuery();
@@ -568,6 +591,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
             order.setTotalPrice(ors.getBigDecimal("total_price"));
             order.setStatus(ors.getString("status"));
             try { order.setCreatedAt(ors.getTimestamp("order_time")); } catch (Exception ignored) {}
+            try { order.setSerialNumber(ors.getInt("serial_number")); } catch (Exception ignored) {}
 
             istmt = conn.prepareStatement("SELECT oi.item_id, oi.order_id, oi.menu_id, oi.dish_id, oi.quantity, oi.unit_price, d.name AS dish_name, m.name AS menu_name FROM order_items oi JOIN dishes d ON oi.dish_id = d.dish_id LEFT JOIN menus m ON oi.menu_id = m.menu_id WHERE oi.order_id = ? ORDER BY oi.item_id");
             istmt.setInt(1, orderId);
@@ -745,7 +769,10 @@ public class OrdersResourceApiServlet extends HttpServlet {
         ResultSet irs = null;
         try {
             conn = DBUtil.getConnection();
-            StringBuilder sql = new StringBuilder("SELECT order_id, user_id, restaurant_id, total_price, status, order_time FROM orders WHERE user_id = ? ");
+            StringBuilder sql = new StringBuilder("SELECT order_id, user_id, restaurant_id, total_price, status, order_time, " +
+                    "(SELECT COUNT(1) FROM orders o2 WHERE o2.restaurant_id = orders.restaurant_id AND DATE(o2.order_time) = DATE(orders.order_time) " +
+                    "AND (o2.order_time < orders.order_time OR (o2.order_time = orders.order_time AND o2.order_id <= orders.order_id))) AS serial_number " +
+                    "FROM orders WHERE user_id = ? ");
             java.util.List<Object> params = new java.util.ArrayList<>();
             params.add(userId);
             if (status != null && !status.isEmpty()) { sql.append(" AND status = ? "); params.add(status); }
@@ -773,6 +800,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                 order.setTotalPrice(ors.getBigDecimal("total_price"));
                 order.setStatus(ors.getString("status"));
                 try { order.setCreatedAt(ors.getTimestamp("order_time")); } catch (Exception ignored) {}
+                try { order.setSerialNumber(ors.getInt("serial_number")); } catch (Exception ignored) {}
                 orders.add(order);
                 orderIds.add(order.getOrderId());
                 map.put(order.getOrderId(), order);

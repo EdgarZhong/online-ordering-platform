@@ -1,7 +1,6 @@
 package com.platform.ordering.filter;
 
 import javax.servlet.*;
-import javax.servlet.annotation.WebFilter;
 import java.io.IOException;
 
 /**
@@ -11,7 +10,6 @@ import java.io.IOException;
  * 这是Java Web开发的标准实践之一。
  * </p>
  */
-@WebFilter("/*") // 应用于所有请求
 public class CharacterEncodingFilter implements Filter {
 
     private static final String ENCODING = "UTF-8";
@@ -27,7 +25,7 @@ public class CharacterEncodingFilter implements Filter {
         request.setCharacterEncoding(ENCODING);
 
         // 2. 设置响应编码
-        response.setContentType("text/html; charset=" + ENCODING);
+        response.setCharacterEncoding(ENCODING);
 
         // 3. 将请求传递给过滤器链中的下一个过滤器或目标Servlet
         chain.doFilter(request, response);

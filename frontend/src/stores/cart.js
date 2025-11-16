@@ -102,7 +102,7 @@ export const useCartStore = defineStore('cart', {
         menus: cart.menus.map(m => ({
           menuId: m.menuId,
           quantity: m.isPackage ? (m.quantity || 0) : 0,
-          items: m.items.map(it => ({ dishId: it.dishId, sortOrder: it.sortOrder, quantity: it.quantity })),
+          items: m.items.map(it => ({ dishId: it.dishId, sortOrder: it.sortOrder, quantity: Math.max(1, parseInt(it.quantity || 0)) })),
           menuVersion: m.menuVersion || '',
           menuSignature: m.menuSignature || ''
         }))

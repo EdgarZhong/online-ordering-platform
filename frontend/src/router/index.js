@@ -17,6 +17,8 @@ const router = createRouter({
   ]
 })
 
+const BACKEND_BASE = import.meta.env.VITE_BACKEND_BASE
+
 router.beforeEach(async () => {
   try {
     const s = await getSession()
@@ -24,12 +26,12 @@ router.beforeEach(async () => {
     auth.user = s
     if (!s || s.role !== 'customer') {
       const ret = encodeURIComponent(window.location.href)
-      window.location.href = `http://localhost:8080/online_ordering_backend_war_exploded/login.jsp?redirect=${ret}`
+      window.location.href = `${BACKEND_BASE}/login.jsp?redirect=${ret}`
       return false
     }
   } catch (e) {
     const ret = encodeURIComponent(window.location.href)
-    window.location.href = `http://localhost:8080/online_ordering_backend_war_exploded/login.jsp?redirect=${ret}`
+    window.location.href = `${BACKEND_BASE}/login.jsp?redirect=${ret}`
     return false
   }
 })

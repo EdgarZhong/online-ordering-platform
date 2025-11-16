@@ -109,6 +109,7 @@
     try {
       var es = new EventSource("${pageContext.request.contextPath}/admin/kitchen/events");
       es.addEventListener("new_order", function(){ location.reload(); });
+      es.addEventListener("order_updated", function(){ location.reload(); });
       es.addEventListener("hello", function(){});
       es.addEventListener("ping", function(){});
       es.onerror = function(){ try { es.close(); } catch(e){} setTimeout(connect, 3000); };
