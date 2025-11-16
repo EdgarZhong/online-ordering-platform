@@ -104,20 +104,22 @@ graph TD
 erDiagram
     restaurants {
         int restaurant_id PK
-        varchar name
+        varchar name "唯一"
         varchar address
         varchar phone
         varchar logo_url
         text description
+        timestamp created_at
     }
 
     users {
         int user_id PK
-        int restaurant_id FK "商户管理员所属的餐厅ID"
+        int restaurant_id FK "商户管理员所属的餐厅ID (删除餐厅时置空)"
         varchar username
         varchar password
-        varchar role "customer, merchant, superadmin"
+        varchar role "customer | merchant | superadmin (CHECK)"
         varchar phone
+        timestamp created_at
     }
 
     menus {
@@ -125,6 +127,8 @@ erDiagram
         int restaurant_id FK
         varchar name "例如: 午市套餐, 招牌单点"
         text description
+        boolean is_package "是否套餐"
+        int sort_order "排序序号"
     }
 
     dishes {
@@ -133,6 +137,8 @@ erDiagram
         varchar name
         varchar image_url
         text description
+        decimal default_price "基础默认单价"
+        timestamp created_at
     }
 
     menu_items {
@@ -140,6 +146,8 @@ erDiagram
         int menu_id FK
         int dish_id FK
         decimal price "该菜品在此菜单中的特定售价"
+        int quantity "套餐内默认份数"
+        int sort_order "菜单内排序序号"
     }
 
     orders {
@@ -147,7 +155,8 @@ erDiagram
         int user_id FK "下单的消费者ID"
         int restaurant_id FK "订单所属的餐厅ID"
         decimal total_price
-        varchar status
+        varchar status "PENDING | PROCESSING | COMPLETED | CANCELLED"
+        timestamp order_time
     }
 
     order_items {
@@ -156,6 +165,7 @@ erDiagram
         int dish_id FK
         int quantity
         decimal unit_price "下单时快照单价"
+        int menu_id FK "下单时所属菜单（可空）"
     }
 
     restaurants ||--|{ users : "employs"
@@ -170,6 +180,7 @@ erDiagram
 
     orders ||--|{ order_items : "details"
     dishes ||--|{ order_items : "itemizes"
+    menus ||--o{ order_items : "context"
 ```
 ER图已完成设计，逻辑设计与表结构设计将在~/database/schema.sql中体现
 
@@ -322,7 +333,7 @@ ER图已完成设计，逻辑设计与表结构设计将在~/database/schema.sql
 - 验证与演示：完成后执行 213（数据扩充）与 214（测试页），验证隔离与功能演示。
 - 仪表盘：201 由 E 搭骨架，后续由 B 挂接真实数据。
 
-#### **Sprint 3 任务看板（规划中）**
+#### **Sprint 3 任务看板（已暂结）**
 
 **目标**: 实现消费者的主要订餐流程，包括只读API、前端路由与组件、以及核心的下单事务。
 
@@ -344,7 +355,7 @@ ER图已完成设计，逻辑设计与表结构设计将在~/database/schema.sql
 | 314 | 测试 | **API 测试**: 使用 Postman 或类似工具测试所有只读 API | A/B | 待办 | 1 | 确保 API 质量 |
 | 315 | 测试 | **端到端测试**: 完成从浏览到下单的完整流程测试 | 全员 | 待办 | 2 | 验收 |
 
-#### **Sprint 4 任务看板（进行中）**
+#### **Sprint 4 任务看板（已暂结）**
 
 **目标**: 完成商家端订单管理（JSP/Servlet/DAO），厨房/出餐面板，确保 `/admin/*` 下的所有数据操作严格绑定 `restaurant_id` 并通过端到端验收。
 
@@ -358,7 +369,6 @@ ER图已完成设计，逻辑设计与表结构设计将在~/database/schema.sql
 | 406 | US-Auth-Routes | **路由与鉴权**：`/admin/orders/*`、`/admin/kitchen/*` 注解/注册；`AuthFilter` 注入租户上下文 | C | 进行中 | 2 |  | Kitchen 路由待注册 |
 | 407 | 测试 | **DAO 集成测试**：分页/筛选/详情/更新；Servlet 参数/会话校验 | A/B/C | 待办 | 2 |  | `webapp/test/` 补充示例 |
 | 408 | NFR-Consistency | **并发一致性**（可选）：状态更新加版本/时间戳乐观锁 | A | 待办 | 2 |  | 失败提示“已被其他人更新” |
-| 409 | 审计 | **操作审计**：记录 `updated_by/updated_at/reason`（数据库字段与DAO更新） | A/B | 待办 | 2 |  | 需要迁移脚本与接口扩展 |
 | 410 | 安全 | **数据隔离审计**：检查所有查询/更新绑定 `restaurant_id`（包含新建模块） | A | 进行中 | 1 |  | 覆盖 Kitchen/Orders Admin |
 | 411 | 文档 | **文档与测试页**：更新 `API.md/log.md`，补充 `api-tests.jsp` 商家端用例 | E | 待办 | 1 |  | 对齐契约与演示 |
 | 412 | 验收 | **端到端验收**：从商家列表、处理订单到消费者查看状态的闭环 | 全员 | 待办 | 2 |  | 录制 Demo 视频 |
@@ -366,7 +376,7 @@ ER图已完成设计，逻辑设计与表结构设计将在~/database/schema.sql
 ##### **里程碑（Sprint 4）**
 
 - M1：DAO 与控制器骨架、列表 JSP 与分页、筛选基础（任务 401–404）。
-- M2：详情 JSP、状态流转与审计（任务 402、409）。
+- M2：详情 JSP、状态流转（任务 402）。
 - M3：厨房面板、快捷操作、并发与安全完善（任务 405、408、410）。
 - M4：测试与优化、验收与文档更新（任务 407、411、412）。
 
@@ -375,3 +385,22 @@ ER图已完成设计，逻辑设计与表结构设计将在~/database/schema.sql
 - 订单量大导致分页性能问题 → 加索引（`order_time/status/restaurant_id`）与只取摘要列；必要时改为游标或按时间区间分页。
 - 并发流转冲突 → 引入版本/时间戳作为乐观锁，更新失败提示重试；必要时二次确认弹窗。
 - 厨房面板刷新策略 → 首期采用手动刷新/轮询；后续可引入SSE（仍走 Servlet，不暴露 REST API）。
+
+---
+
+### 演示功能与操作详表（Demo Checklist）
+
+| 模块 | 演示功能 | 入口 | 操作步骤 | 预期结果 | 代码参考 |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| 登录鉴权 | 混合架构登录与重定向 | `login.jsp` | 在消费者前端未登录时访问受保护页触发重定向；提交用户名密码登录 | 设置 `JSESSIONID`，消费者跳转到前端域；商户跳转后台仪表盘 | `backend/src/main/java/com/platform/ordering/controller/LoginServlet.java:22-74`；`backend/src/main/java/com/platform/ordering/filter/AuthFilter.java:36-92` |
+| 消费者浏览 | 餐厅列表与详情 | 前端首页 | 点击进入餐厅详情 | 列表与详情展示，API 返回 JSON | `backend/src/main/java/com/platform/ordering/api/RestaurantsApiServlet.java:19-52`；`backend/src/main/java/com/platform/ordering/api/RestaurantResourceApiServlet.java:21-86` |
+| 菜单项 | 菜单项与版本签名 | 餐厅菜单页 | 查看菜单项 | 响应头含 `X-Menu-Version/X-Menu-Signature/ETag`，用于再次购买校验 | `backend/src/main/java/com/platform/ordering/api/MenusResourceApiServlet.java:64-83` |
+| 下单 | 创建订单（事务） | 购物车结算 | 登录后提交订单 | `201 Created` 返回 `orderId/status/totalPrice`；数据库写入 `orders/order_items`；SSE 推送新订单事件 | `backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java:480-525`；`backend/src/main/java/com/platform/ordering/util/KitchenEventBus.java:40-52` |
+| 订单查询 | 订单列表（分页）与详情 | 个人订单页 | 使用筛选/分页参数查询列表；查看某订单详情 | 返回带 `X-Page/X-Size` 的列表；详情包含分组与菜品快照 | `backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java:30-110` |
+| 取消订单 | 仅 `PENDING` 可取消 | 订单详情页 | 点击“取消订单” | 成功返回 `200` 与 `CANCELLED`；不合法返回 `409` | `backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java:283-335` |
+| 商户列表 | 订单列表与筛选分页 | 后台 `Admin` | 选择时间范围/状态/关键字 | JSP 展示数据，分页与统计 | `backend/src/main/java/com/platform/ordering/controller/OrdersAdminServlet.java:59-97` |
+| 商户详情 | 订单详情分组与小计 | 后台 `Admin` | 查看详情 | 按菜单分组，显示小计与是否套餐 | `backend/src/main/java/com/platform/ordering/controller/OrdersAdminServlet.java:99-128` |
+| 状态流转 | PENDING→PROCESSING→COMPLETED/取消 | 后台 `Admin` | 点击“开始备餐/完成/取消” | 合法更新成功；非法返回 `409`；触发 SSE 更新事件 | `backend/src/main/java/com/platform/ordering/controller/OrdersAdminServlet.java:139-166`；`backend/src/main/java/com/platform/ordering/util/KitchenEventBus.java:54-66` |
+| 厨房面板 | 分栏展示与事件刷新 | 后台 `Kitchen` | 打开厨房面板，保持连接 | 面板分组展示；事件驱动刷新（或心跳 ping） | `backend/src/main/java/com/platform/ordering/controller/KitchenBoardServlet.java:29-48`；`backend/src/main/java/com/platform/ordering/controller/KitchenEventsServlet.java:13-48` |
+
+> 配套流程图已生成于 `docs/`：`flow-auth.mmd`、`flow-consumer-order.mmd`、`flow-merchant-kitchen.mmd`。

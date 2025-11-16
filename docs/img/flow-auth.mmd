@@ -1,0 +1,23 @@
+flowchart TD
+    subgraph 消费者前端
+        A[路由守卫 beforeEach]
+    end
+    subgraph 后端
+        B[login.jsp]
+        C[LoginServlet: POST /login]
+        D[AuthFilter: /admin/*]
+    end
+
+    A -->|未登录| B
+    B --> C
+    C -->|验证成功| E[设置 Session 和 Set-Cookie]
+    E --> F{redirect 合法?}
+    F -->|是| G[重定向到 redirect]
+    F -->|否| H{角色}
+    H -->|merchant/superadmin| I[admin/dashboard]
+    H -->|customer| J[consumerDefaultRedirect]
+
+    A -->|已登录| K[受保护资源]
+    K --> D
+    D -->|通过| L[继续访问 /admin/*]
+    D -->|失败| B

@@ -9,18 +9,18 @@
 - **基本路径**: 所有 API 的基本路径为 `/api`。
 - **状态码**:
   - `200 OK`: 请求成功。
-  - `201 Created`: 资源创建成功 (例如，下单成功)。
+  - `201 Created`: 资源创建成功（例如，下单成功）。
   - `400 Bad Request`: 请求参数无效或格式错误。
   - `401 Unauthorized`: 未登录或会话失效（如订单查询）。
-  - `404 Not Found`: 请求的资源不存在。
-  - `409 Conflict`: 资源冲突 (例如，尝试创建已存在的资源)。
+  - `404 Not Found`: 请求的资源不存在或无权限访问。
+  - `409 Conflict`: 资源冲突（如订单在当前状态不可取消或已被他人更新）。
   - `500 Internal Server Error`: 服务器内部错误。
 
 ### 通用约定 (Conventions)
 - 请求头：`Accept: application/json`
 - 响应头：`Content-Type: application/json; charset=UTF-8`
 - 错误返回统一为：`{"error": "message"}`（字符串信息，不包含错误码字段）
-- 分页与排序：当前 Sprint 暂不支持；后续将引入 `page`、`pageSize`、`sort` 参数
+- 分页与排序：订单列表已支持分页与筛选（见 3.6 历史订单接口）。
 - 版本管理：当前版本为 `v1`，路径不含版本号（后续可能引入 `/api/v2`）
 
 ## 2. 认证 (Authentication)
@@ -110,6 +110,7 @@
   - `menuId` (int) 菜单ID
   - `name` (string) 名称
   - `description` (string) 描述
+  - `isPackage` (boolean) 是否套餐（套餐在下单与展示时以菜单维度计算）
 - **成功响应 (200 OK)**:
   ```json
   [
@@ -139,6 +140,12 @@
   - `imageUrl` (string) 菜品图片URL（可为空）
   - `description` (string) 菜品描述（可为空）
   - `price` (number) 当前菜单项价格（来源于 `menu_items.price`）
+  - `sortOrder` (int) 菜单内排序序号
+  - `defaultQuantity` (int) 套餐内默认份数（非套餐为 0 或省略）
+- **响应头**:
+  - `X-Menu-Version`: 菜单版本（签名截断）
+  - `X-Menu-Signature`: 菜单签名（基于菜品/数量/排序/价格）
+  - `ETag`: `menu-{menuId}-{version}`
 - **成功响应 (200 OK)**:
   ```json
   [
@@ -163,7 +170,7 @@
 
 ### 模块三: 订单 (Orders)
 
-#### 3.5 创建订单 (下单)
+#### 3.5 创建订单（下单）
 
 - **Endpoint**: `POST /api/orders`
 - **描述**: 消费者提交购物车内容，创建新订单。**需要用户登录**。当前契约以“菜单维度”组织，支持套餐严格校验与计价。
@@ -202,14 +209,15 @@
   }
   ```
 - **校验与规则**:
-  - 每个 `item` 必须提供 `dishId`（非套餐还需提供数量）；以 `menu_items` 中该菜单的 `price` 为准
-  - `menuId` 必须属于 `restaurantId`；否则拒绝（`400`）
-  - 同一餐厅中允许菜品在多个菜单出现；下单以用户选择菜单的价格计算
-  - `totalPrice` 服务端计算，不接受客户端传入
-  - 原子性：`orders` 与 `order_items` 在同一事务中写入；任一失败回滚
-  - 防越权：会话用户作为订单归属 `user_id`
+  - 每个 `item` 必须提供 `dishId`（非套餐还需提供数量）；以 `menu_items` 中该菜单的 `price` 为准。
+  - `menuId` 必须属于 `restaurantId`；否则拒绝（`400`）。
+  - 套餐校验：`items[]` 必须与服务端菜单项完全一致（`dishId/sortOrder/quantity`），可选校验 `menuSignature`；不一致返回 `409`。参见 `perPackageQuantity/sortOrder` 字段含义。
+  - 同一餐厅中允许菜品在多个菜单出现；下单以用户选择菜单的价格计算。
+  - `totalPrice` 服务端计算，不接受客户端传入。
+  - 原子性：`orders` 与 `order_items` 在同一事务中写入；任一失败回滚。
+  - 防越权：会话用户作为订单归属 `user_id`。
 
-#### 3.6 查询订单状态
+#### 3.6 查询订单状态（详情）
 
 - **Endpoint**: `GET /api/orders/{orderId}`
 - **描述**: 查询特定订单的状态和详情。**需要用户登录**，且只能查询自己的订单。
@@ -274,6 +282,57 @@
 
 ---
 
+#### 3.7 查询历史订单（分页）
+
+- **Endpoint**: `GET /api/orders`
+- **描述**: 查询当前登录用户的历史订单列表，支持分页与筛选。
+- **查询参数**:
+  - `page` (int, default 0): 页码（从 0 开始）。
+  - `size` (int, default 20): 每页条数。
+  - `status` (string, optional): 订单状态过滤。
+  - `from` (string, optional): 起始时间（`YYYY-MM-DDTHH:mm:ss`）。
+  - `to` (string, optional): 截止时间（`YYYY-MM-DDTHH:mm:ss`）。
+- **响应头**:
+  - `X-Page`: 当前页码。
+  - `X-Size`: 当前页大小。
+- **响应字段（列表元素）**:
+  - `orderId`, `restaurantId`, `restaurantName`, `serialNumber`, `status`, `totalPrice`, `createdAt`
+  - `items[]`: `menuId/menuName/dishId/dishName/quantity/unitPrice`
+- **成功响应 (200 OK)**:
+  ```json
+  [
+    {
+      "restaurantId": 1,
+      "orderId": 5001,
+      "restaurantName": "王记私房菜",
+      "serialNumber": 12,
+      "status": "PENDING",
+      "totalPrice": 182.00,
+      "createdAt": "2025-11-07T14:30:00Z",
+      "items": [
+        { "menuId": 2, "menuName": "招牌单点", "dishId": 101, "dishName": "红烧肉", "quantity": 1, "unitPrice": 45.00 }
+      ]
+    }
+  ]
+  ```
+- **错误响应 (401 Unauthorized)**: 未登录。
+
+#### 3.8 取消订单
+
+- **Endpoint**: `POST /api/orders/{orderId}/cancel`
+- **描述**: 取消当前登录用户的指定订单；仅当订单状态为 `PENDING` 时允许。
+- **URL 参数**:
+  - `orderId` (integer, required)
+- **成功响应 (200 OK)**:
+  ```json
+  { "orderId": 5001, "status": "CANCELLED" }
+  ```
+- **错误响应**:
+  - `404 Not Found`: 订单不存在或无权限。
+  - `409 Conflict`: 订单不可取消或已被他人更新。
+
+---
+
 ## 4. 实体字段映射 (Entity Field Mapping)
 - Restaurant → `restaurants`
   - `restaurant_id` → `restaurantId`
@@ -292,12 +351,13 @@
   - `user_id`, `restaurant_id`, `total_price`, `status`, `order_time` → `createdAt`
   - `serialNumber` 为运行时计算字段（按“每日/餐厅”有序号），非持久化列
 - OrderItem → `order_items` JOIN `dishes`
-  - `dish_name` (from `dishes.name`) → `dishName`
+  - `dish_name`（来自 `dishes.name`）→ `dishName`
   - `quantity`, `unit_price`
+  - 扩展：在订单详情的 `menus[].items[]` 中还包含 `perPackageQuantity` 与 `sortOrder`（用于套餐数量与展示排序）
 
 ## 5. 安全与隔离 (Security & Isolation)
-- 多租户隔离：所有数据访问在 DAO/SQL 层通过 `restaurant_id` 进行过滤与关联
-- 只读接口：餐厅与菜单为公开数据；订单接口严格绑定会话用户
+- 多租户隔离：所有数据访问在 DAO/SQL 层通过 `restaurant_id` 进行过滤与关联。
+- 只读接口：餐厅与菜单为公开数据；订单接口严格绑定会话用户。
 - 会话鉴权：通过服务器 Session 管理登录态；未登录访问订单返回 `401`
  - **curl 示例**:
    ```bash

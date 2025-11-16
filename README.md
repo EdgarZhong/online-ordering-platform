@@ -1,7 +1,5 @@
-# Final大作业项目规划与技术选型
+## Final大作业项目概述与技术选型
 
-**请你们查看 [当前阶段项目说明](docs/CurrentStageProjectGuide.md)**
-**前往[路径配置文件教程](docs/path-and-environment-variables.md)**
 ### 1. 项目概述
 本项目为“网上订餐系统”，根据课程要求，分为两大模块：
 - **系统管理模块**：供管理员使用，负责管理菜品、订单、用户等。
@@ -110,9 +108,101 @@ online-ordering-platform/
     └── initial-data.sql     # 初始数据插入脚本
 ```
 
-分工开发:
-- 后端团队成员（A, B, C）在 backend/ 目录下进行他们的Maven项目开发。
-- 前端团队成员（D, E）在 frontend/ 目录下进行他们的Vue.js项目开发。
 两个子项目统一在主仓库下管理，主分支为main
 
-**请前往[项目开发文档](./docs/development.md)仔细阅读并提出你的想法**
+## Quick Start（后端 WAR 与前端 ZIP 的快速部署）
+
+### 前提条件
+- JDK `8+`（建议 `11`）、Tomcat `9.x`（`javax.servlet`）、PostgreSQL `13+`
+- 后端包：`online-ordering.war`
+- 前端包：`frontend-dist.zip`（Vite 构建产物 `dist/` 压缩包）
+
+### 1. 数据库准备
+- 创建数据库：`ordering_platform`
+- 执行脚本：`database/schema.sql`、`database/initial-data.sql`
+- 账户与端口：默认 `postgres@127.0.0.1:5432`（按实际环境调整）
+
+### 2. 部署后端（Tomcat 手工部署）
+- 将 `online-ordering.war` 拷贝到 `TOMCAT_HOME/webapps/`，建议重命名为 `online_ordering.war`，上下文路径为 `/online_ordering`
+- 放置数据库配置 `db.properties` 到 `WEB-INF/classes`：
+  - 路径：`TOMCAT_HOME/webapps/online_ordering/WEB-INF/classes/db.properties`
+  - 内容：
+    ```properties
+    db.driver=org.postgresql.Driver
+    db.url=jdbc:postgresql://127.0.0.1:5432/ordering_platform
+    db.username=postgres
+    db.password=postgres
+    ```
+  - 代码读取位置：`backend/src/main/java/com/platform/ordering/util/DBUtil.java:29-46`
+- 校验 `WEB-INF/web.xml` 两个关键参数（开发/生产值参考 `docs/path-and-environment-variables.md`）：
+  - `consumerDefaultRedirect`（登录后消费者默认回跳地址）
+  - `corsAllowedOrigin`（允许跨域的前端来源）
+- 启动 Tomcat：`TOMCAT_HOME/bin/startup.bat`（Windows）
+- 验证后端：访问 `http://localhost:8080/online_ordering/login.jsp`
+
+### 3. 部署前端（静态资源）
+- 解压 `frontend-dist.zip` 到静态站点或反向代理根目录（例如 Nginx 的 `html/` 或子路径 `consumer/`）
+- 两种部署模式：
+  - 不同域（推荐）：
+    - 前端：`https://app.example.com/`
+    - 后端：`https://api.example.com/online_ordering`
+    - 前端构建前 `.env` 示例：`docs/path-and-environment-variables.md` 的生产方案 A
+    - 后端 `web.xml`：`consumerDefaultRedirect=https://app.example.com/`、`corsAllowedOrigin=https://app.example.com`
+    - 跨域 Cookie：生产需 HTTPS，服务端已设置 `SameSite=None`，并在安全连接下添加 `Secure`（`backend/src/main/java/com/platform/ordering/controller/LoginServlet.java:39-44`）
+  - 同域不同上下文：
+    - 前端：`http://localhost:8080/consumer/`
+    - 后端：`http://localhost:8080/online_ordering`
+    - 前端 `.env` 可使用相对路径（生产方案 B）；Tomcat 需为前端配置 SPA 回退到 `index.html`
+
+### 3A. 前端快速调试（开发模式，推荐用于验证）
+- 适用：拿到前端源码 ZIP（包含 `package.json/src/` 等）
+- 步骤：
+  - 解压到 `frontend/`
+  - 在 `frontend/.env` 写入开发配置（详情见 `docs/path-and-environment-variables.md`）：
+    ```env
+    VITE_BACKEND_BASE=http://localhost:8080/online_ordering
+    VITE_API_BASE=http://localhost:8080/online_ordering/api
+    VITE_BACKEND_CONTEXT=/online_ordering
+    VITE_BACKEND_TARGET=http://localhost:8080
+    VITE_DEV_PORT=5173
+    ```
+  - 安装依赖并启动调试：
+    - `npm install`
+    - `npm run dev`
+  - 浏览器访问 `http://localhost:5173/`，路由守卫会在未登录时跳转到后端 `login.jsp`；登录成功后按 `redirect` 或默认前端地址回跳。
+- 注意：
+  - 跨域 Cookie 在开发环境 `http://localhost` 下无需 `Secure`；后端已按是否 HTTPS 决定是否添加 `Secure`。
+  - 若拿到的是构建产物 ZIP（仅 `dist/`），请使用上面的“静态资源部署”方案而非开发模式。
+
+### 4. 快速验证
+- 登录与重定向：
+  - 打开前端受保护页，未登录将跳转后端 `login.jsp`；登录成功后回跳到前端或后台仪表盘（`backend/src/main/java/com/platform/ordering/controller/LoginServlet.java:66-74`）
+- 消费者端 API：
+  - `GET /api/restaurants`、`GET /api/restaurants/:id` 正常返回（`backend/src/main/java/com/platform/ordering/api/RestaurantsApiServlet.java:19-52`、`RestaurantResourceApiServlet.java:21-86`）
+  - `GET /api/menus/:menuId/items` 响应头含 `X-Menu-Version/X-Menu-Signature/ETag`（`backend/src/main/java/com/platform/ordering/api/MenusResourceApiServlet.java:64-83`）
+  - `POST /api/orders` 返回 `201 Created` 与 `orderId/status/totalPrice`（`backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java:480-525`）
+  - `GET /api/orders`（分页头 `X-Page/X-Size`）、`GET /api/orders/:orderId`（`backend/src/main/java/com/platform/ordering/api/OrdersResourceApiServlet.java:30-110`）
+  - `POST /api/orders/:orderId/cancel`（仅 `PENDING`，`OrdersResourceApiServlet.java:283-335`）
+- 商户端：
+  - 列表与详情：`/admin/orders`、`/admin/orders/:id`（`backend/src/main/java/com/platform/ordering/controller/OrdersAdminServlet.java:59-97, 99-169`）
+  - 厨房面板与 SSE：`/admin/kitchen`、`/admin/kitchen/events`（`backend/src/main/java/com/platform/ordering/controller/KitchenBoardServlet.java:29-48`、`KitchenEventsServlet.java:13-48`）
+
+### 5. 常见问题
+- Tomcat 版本不匹配：请使用 Tomcat `9.x`（`javax.servlet`）；Tomcat `10` 为 `jakarta.servlet` 不兼容。
+- WAR 上下文名变更后忘记同步：前端 `.env` 与后端 `web.xml` 必须一致（详见 `docs/path-and-environment-variables.md`）。
+- 跨域 Cookie 未携带（消费者登录后无法重定向至前端，卡在登录页）：生产需 HTTPS，确保前端域与 `web.xml`中的参数`corsAllowedOrigin` 需要精确匹配，浏览器允许凭据携带。
+
+## 文档快捷访问
+
+| 文档名称 | 简述 | 文档链接 |
+| :--- | :--- | :--- |
+| management-interact.md | 商家后台菜品与菜单管理交互流程说明 | [docs/management-interact.md](docs/management-interact.md) |
+| development.md | 项目开发指导（概念构思、开发计划、分工与演示） | [docs/development.md](docs/development.md) |
+| API.md | 消费者端 RESTful API 文档 | [docs/API.md](docs/API.md) |
+| path-and-environment-variables.md | 前后端路径与环境变量配置教程 | [docs/path-and-environment-variables.md](docs/path-and-environment-variables.md) |
+| log.md | 开发日志 | [docs/log.md](docs/log.md) |
+| CurrentStageProjectGuide.md | 当前阶段项目说明（克隆运行、依赖环境、测试账号） | [docs/CurrentStageProjectGuide.md](docs/CurrentStageProjectGuide.md) |
+| 前端UIUX设计文档.md | 前端 UI/UX 设计规范与用户旅程逻辑 | [docs/前端UIUX设计文档.md](docs/%E5%89%8D%E7%AB%AFUIUX%E8%AE%BE%E8%AE%A1%E6%96%87%E6%A1%A3.md) |
+| product-backlog.md | 产品待办列表（用户故事与优先级） | [docs/product-backlog.md](docs/product-backlog.md) |
+| Agile.md | 敏捷开发流程指导与实践 | [docs/Agile.md](docs/Agile.md) |
+

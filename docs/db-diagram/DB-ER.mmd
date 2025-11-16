@@ -1,20 +1,22 @@
 erDiagram
     restaurants {
         int restaurant_id PK
-        varchar name
+        varchar name "唯一"
         varchar address
         varchar phone
         varchar logo_url
         text description
+        timestamp created_at
     }
 
     users {
         int user_id PK
-        int restaurant_id FK "商户管理员所属的餐厅ID"
+        int restaurant_id FK "商户管理员所属的餐厅ID (删除餐厅时置空)"
         varchar username
         varchar password
-        varchar role "customer, merchant, superadmin"
+        varchar role "customer | merchant | superadmin (CHECK)"
         varchar phone
+        timestamp created_at
     }
 
     menus {
@@ -22,6 +24,8 @@ erDiagram
         int restaurant_id FK
         varchar name "例如: 午市套餐, 招牌单点"
         text description
+        boolean is_package "是否套餐"
+        int sort_order "排序序号"
     }
 
     dishes {
@@ -30,6 +34,8 @@ erDiagram
         varchar name
         varchar image_url
         text description
+        decimal default_price "基础默认单价"
+        timestamp created_at
     }
 
     menu_items {
@@ -37,6 +43,8 @@ erDiagram
         int menu_id FK
         int dish_id FK
         decimal price "该菜品在此菜单中的特定售价"
+        int quantity "套餐内默认份数"
+        int sort_order "菜单内排序序号"
     }
 
     orders {
@@ -44,7 +52,8 @@ erDiagram
         int user_id FK "下单的消费者ID"
         int restaurant_id FK "订单所属的餐厅ID"
         decimal total_price
-        varchar status
+        varchar status "PENDING | PROCESSING | COMPLETED | CANCELLED"
+        timestamp order_time
     }
 
     order_items {
@@ -53,6 +62,7 @@ erDiagram
         int dish_id FK
         int quantity
         decimal unit_price "下单时快照单价"
+        int menu_id FK "下单时所属菜单（可空）"
     }
 
     restaurants ||--|{ users : "employs"
@@ -67,3 +77,4 @@ erDiagram
 
     orders ||--|{ order_items : "details"
     dishes ||--|{ order_items : "itemizes"
+    menus ||--o{ order_items : "context"

@@ -1,0 +1,26 @@
+flowchart TD
+    subgraph 商户后台
+        L[登录 login.jsp]
+        D1[AuthFilter 检查角色/租户]
+        DD[admin/dashboard]
+        OL[订单列表 GET /admin/orders]
+        OD[订单详情 GET /admin/orders/:id]
+        OU[状态更新 POST action=updateStatus]
+    end
+    subgraph 后端控制器
+        S1[OrdersAdminServlet]
+        S2[KitchenBoardServlet]
+        S3[KitchenEventsServlet SSE]
+    end
+    subgraph 数据库
+        T[orders/order_items]
+    end
+    subgraph 事件
+        Bus[KitchenEventBus]
+    end
+
+    L --> D1 --> DD --> OL --> S1 --> T
+    S1 --> OD --> T
+    OD --> OU --> S1 --> T --> Bus
+    DD --> S2 --> KPage[admin/kitchen]
+    S2 --> S3 --> Bus
