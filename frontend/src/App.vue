@@ -9,6 +9,7 @@
       <div v-if="user" class="user" ref="userEl">
         <button class="user-btn" @click="toggleMenu">欢迎，{{ user.username }} ▾</button>
         <div v-if="menuOpen" class="menu">
+          <a href="#" @click.prevent="openChangePwd">修改密码</a>
           <a href="#" @click.prevent="logout">退出登录</a>
         </div>
       </div>
@@ -16,6 +17,23 @@
     <main>
       <router-view />
     </main>
+    <div v-if="showChangePwd" class="modal-mask" @click.self="showChangePwd=false">
+      <div class="modal">
+        <h3>修改密码</h3>
+        <div class="form">
+          <label>当前密码</label>
+          <input type="password" v-model="oldPwd" />
+          <label>新密码</label>
+          <input type="password" v-model="newPwd" />
+          <label>确认新密码</label>
+          <input type="password" v-model="confirmPwd" />
+        </div>
+        <div class="actions">
+          <button @click="showChangePwd=false">取消</button>
+          <button :disabled="loading" @click="submitChangePwd">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -27,8 +45,29 @@ const auth = useAuthStore()
 const user = computed(() => auth.user)
 const menuOpen = ref(false)
 const userEl = ref(null)
-function toggleMenu() { menuOpen.value = !menuOpen.value }
-function logout() { auth.logout() }
+  function toggleMenu() { menuOpen.value = !menuOpen.value }
+  function logout() { auth.logout() }
+  const showChangePwd = ref(false)
+  const oldPwd = ref('')
+  const newPwd = ref('')
+  const confirmPwd = ref('')
+  const loading = ref(false)
+  function openChangePwd() { showChangePwd.value = true; menuOpen.value = false }
+  async function submitChangePwd() {
+    if (!oldPwd.value || !newPwd.value || !confirmPwd.value) { alert('请填写所有字段'); return }
+    if (newPwd.value !== confirmPwd.value) { alert('两次输入的新密码不一致'); return }
+    try {
+      loading.value = true
+      await auth.changePassword(oldPwd.value, newPwd.value)
+      alert('密码修改成功')
+      showChangePwd.value = false
+      oldPwd.value = newPwd.value = confirmPwd.value = ''
+    } catch (e) {
+      alert('修改失败：' + (e?.response?.data?.error || e.message || '未知错误'))
+    } finally {
+      loading.value = false
+    }
+  }
 function onDocClick(e) {
   if (!userEl.value) return
   if (!userEl.value.contains(e.target)) menuOpen.value = false
@@ -57,4 +96,17 @@ ul { list-style: none; padding: 0; }
 .text-price { font-size: 14px; font-weight: 600; color: #111; }
 .text-qty { font-size: 14px; font-weight: 500; color: #444; }
 .text-muted { color: #666; }
+</style>
+
+ 
+
+<style>
+.modal-mask { position: fixed; left:0; top:0; right:0; bottom:0; background: rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; }
+.modal { background:#fff; border-radius:8px; padding:16px; width:320px; box-shadow:0 6px 20px rgba(0,0,0,0.12); }
+.modal h3 { margin:0 0 8px; }
+.form { display:flex; flex-direction:column; gap:8px; }
+.form input { border:1px solid #e5e7eb; border-radius:6px; padding:6px 8px; }
+.modal .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+.modal .actions button { padding:6px 12px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; cursor:pointer; }
+.modal .actions button[disabled] { opacity:.6; cursor:not-allowed; }
 </style>

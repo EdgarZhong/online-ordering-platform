@@ -30,4 +30,6 @@ public interface UserDAO {
      * @return 返回影响的行数
      */
     int save(User user, Connection conn) throws SQLException;
+
+    int updatePassword(int userId, String newPassword) throws SQLException;
 }

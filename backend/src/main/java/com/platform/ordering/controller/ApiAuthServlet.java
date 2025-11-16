@@ -16,7 +16,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
-@WebServlet("/api/auth/login")
+@WebServlet(urlPatterns = { "/api/auth/login", "/api/account/password" })
 public class ApiAuthServlet extends HttpServlet {
 
     private UserDAO userDAO = new UserDAOImpl();
@@ -24,6 +24,11 @@ public class ApiAuthServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        String servletPath = req.getServletPath();
+        if ("/api/account/password".equals(servletPath)) {
+            handleChangePassword(req, resp);
+            return;
+        }
         String username = req.getParameter("username");
         String password = req.getParameter("password");
 
@@ -62,6 +67,64 @@ public class ApiAuthServlet extends HttpServlet {
             Map<String, String> error = new HashMap<>();
             error.put("message", "服务器内部错误，请稍后再试");
             resp.getWriter().write(gson.toJson(error));
+        }
+    }
+
+    private void handleChangePassword(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        resp.setContentType("application/json;charset=UTF-8");
+        HttpSession session = req.getSession(false);
+        if (session == null) {
+            resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            resp.getWriter().write("{\"error\":\"Unauthorized\"}");
+            return;
+        }
+        Object obj = session.getAttribute("user");
+        if (!(obj instanceof User)) {
+            resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            resp.getWriter().write("{\"error\":\"Unauthorized\"}");
+            return;
+        }
+        User user = (User) obj;
+        if (!"customer".equals(user.getRole())) {
+            resp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            resp.getWriter().write("{\"error\":\"Forbidden\"}");
+            return;
+        }
+        String body = req.getReader().lines().collect(java.util.stream.Collectors.joining());
+        java.util.Map<?,?> payload = null;
+        try {
+            payload = gson.fromJson(body, java.util.Map.class);
+        } catch (Exception e) {
+            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            resp.getWriter().write("{\"error\":\"Invalid JSON\"}");
+            return;
+        }
+        String oldPassword = payload == null ? null : String.valueOf(payload.get("oldPassword"));
+        String newPassword = payload == null ? null : String.valueOf(payload.get("newPassword"));
+        if (oldPassword == null || newPassword == null || oldPassword.isEmpty() || newPassword.isEmpty()) {
+            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            resp.getWriter().write("{\"error\":\"Missing oldPassword/newPassword\"}");
+            return;
+        }
+        if (!String.valueOf(user.getPassword()).equals(oldPassword)) {
+            resp.setStatus(HttpServletResponse.SC_CONFLICT);
+            resp.getWriter().write("{\"error\":\"Old password mismatch\"}");
+            return;
+        }
+        try {
+            int n = userDAO.updatePassword(user.getUserId(), newPassword);
+            if (n <= 0) {
+                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                resp.getWriter().write("{\"error\":\"Update failed\"}");
+                return;
+            }
+            user.setPassword(newPassword);
+            session.setAttribute("user", user);
+            resp.setStatus(HttpServletResponse.SC_OK);
+            resp.getWriter().write("{\"success\":true}");
+        } catch (SQLException e) {
+            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            resp.getWriter().write("{\"error\":\"Internal server error\"}");
         }
     }
 }

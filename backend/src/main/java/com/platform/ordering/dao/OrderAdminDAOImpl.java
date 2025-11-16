@@ -27,7 +27,8 @@ public class OrderAdminDAOImpl implements OrderAdminDAO {
             conn = DBUtil.getConnection();
             StringBuilder sb = new StringBuilder();
             String sql_list = "SELECT order_id, user_id, restaurant_id, total_price, status, order_time, " +
-                    "ROW_NUMBER() OVER (PARTITION BY restaurant_id, DATE(order_time) ORDER BY order_time, order_id) AS serial_number " +
+                    "(SELECT COUNT(1) FROM orders o2 WHERE o2.restaurant_id = orders.restaurant_id AND DATE(o2.order_time) = DATE(orders.order_time) " +
+                    "AND (o2.order_time < orders.order_time OR (o2.order_time = orders.order_time AND o2.order_id <= orders.order_id))) AS serial_number " +
                     "FROM orders WHERE restaurant_id = ?";
             sb.append(sql_list);
             if (status != null && !status.isEmpty()) {

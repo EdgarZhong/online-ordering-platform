@@ -5,13 +5,13 @@
     <div v-else>
       <div class="actions">
         <button class="back-btn" @click="back">返回</button>
-        <button v-if="order.status==='PENDING'" class="btn-cancel" @click="onCancel">取消订单</button>
-        <button class="btn-reorder" @click="onReorder">再次购买</button>
+        <button v-if="order.status==='PENDING'" class="btn-cancel" :disabled="busyCancel" @click="onCancel">取消订单</button>
+        <button class="btn-reorder" :disabled="busyReorder" @click="onReorder">再次购买</button>
       </div>
       <h1 class="title">流水号：{{ order.serialNumber }}</h1>
       <button class="btn-restaurant" @click="gotoRestaurant">{{ order.restaurantName }}</button>
       <p>订单id：{{ order.orderId }}</p>
-      <p>状态：{{ order.status }} · 金额：￥{{ order.totalPrice }}</p>
+      <p>状态：{{ order.status }} · 金额：￥{{ Number(order.totalPrice || 0).toFixed(2) }}</p>
       <p>时间：{{ order.createdAt }}</p>
       <h3>明细</h3>
       <div v-if="order.menus && order.menus.length">
@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getOrder, cancelOrder, getMenuItems, getMenus } from '../api'
 import { useCartStore } from '../stores/cart'
@@ -62,10 +62,7 @@ onMounted(async () => {
   } catch (e) {
     if (e.response && e.response.status === 401) {
       const ret = encodeURIComponent(window.location.href)
-      const BACKEND_BASE = (
-        import.meta.env.VITE_BACKEND_BASE
-        || (window.location.origin + (import.meta.env.VITE_BACKEND_CONTEXT || ''))
-      )
+      const BACKEND_BASE = import.meta.env.VITE_BACKEND_BASE
       window.location.href = `${BACKEND_BASE}/login.jsp?redirect=${ret}`
       return
     }
@@ -82,20 +79,28 @@ function sortItems(m) {
   return (m.items || []).slice().sort((a,b) => (a.sortOrder || 0) - (b.sortOrder || 0))
 }
 
+const busyCancel = ref(false)
 async function onCancel() {
+  if (busyCancel.value) return
   try {
+    busyCancel.value = true
     await cancelOrder(id)
     order.value = await getOrder(id)
   } catch (e) {
     error.value = '取消失败'
+  } finally {
+    busyCancel.value = false
   }
 }
 
+const busyReorder = ref(false)
 async function onReorder() {
+  if (busyReorder.value) return
   if (!order.value) return
   const rid = order.value.restaurantId
   if (!rid) { error.value = '无法识别餐厅'; return }
   try {
+    busyReorder.value = true
     cart.clearCart(rid)
     let currentMenus = []
     try { currentMenus = await getMenus(rid) } catch (e) { currentMenus = [] }
@@ -152,9 +157,11 @@ async function onReorder() {
         }
       }
     }
-    router.push(`/restaurants/${rid}`)
+    router.push(`/restaurants/${rid}?openCart=1`)
   } catch (e) {
     error.value = '再次购买失败'
+  } finally {
+    busyReorder.value = false
   }
 }
 </script>
@@ -178,4 +185,13 @@ li { padding: 4px 0; }
 .btn-cancel { background: #dc3545; color: #fff; border: none; padding: 6px 10px; border-radius: 4px; }
 .btn-reorder { background: #0d6efd; color: #fff; border: none; padding: 6px 10px; border-radius: 4px; }
 .btn-restaurant { background: #198754; color: #fff; border: none; padding: 6px 10px; border-radius: 4px; margin: 4px 0 8px; }
+.btn-cancel:disabled { opacity: .7; }
+.btn-reorder:disabled { opacity: .7; }
 </style>
+const canReorder = computed(() => {
+  const o = order.value
+  if (!o) return false
+  if (o.menus && o.menus.length) return true
+  if (o.items && o.items.length) return true
+  return false
+})

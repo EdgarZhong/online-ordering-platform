@@ -48,5 +48,6 @@ export const getOrder = (orderId) => instance.get(`/orders/${orderId}`).then(r =
 export const getSession = () => instance.get('/session').then(r => r.data)
 export const getOrders = () => instance.get('/orders').then(r => r.data)
 export const cancelOrder = (orderId) => instance.post(`/orders/${orderId}/cancel`).then(r => r.data)
+export const changePassword = (payload) => instance.post('/account/password', payload).then(r => r.data)
 
 export default instance

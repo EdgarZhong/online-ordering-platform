@@ -91,6 +91,11 @@ onMounted(async () => {
   }
 })
 
+// 打开购物车（来自“再次购买”跳转）
+if (route.query && (route.query.openCart === '1' || route.query.openCart === 1)) {
+  drawerOpen.value = true
+}
+
 watch(activeMenuId, async (mid) => {
   if (!mid) return
   const res = await getMenuItems(mid)

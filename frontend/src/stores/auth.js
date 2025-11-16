@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getSession } from '../api'
+import { getSession, changePassword } from '../api'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({ user: null }),
@@ -12,11 +12,12 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     logout() {
-      const BACKEND_BASE = (
-        import.meta.env.VITE_BACKEND_BASE
-        || (window.location.origin + (import.meta.env.VITE_BACKEND_CONTEXT || ''))
-      )
+      const BACKEND_BASE = import.meta.env.VITE_BACKEND_BASE
       window.location.href = `${BACKEND_BASE}/logout`
+    },
+    async changePassword(oldPassword, newPassword) {
+      const res = await changePassword({ oldPassword, newPassword })
+      return res
     }
   }
 })

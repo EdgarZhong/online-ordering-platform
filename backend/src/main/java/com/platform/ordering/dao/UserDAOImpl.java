@@ -94,4 +94,20 @@ public class UserDAOImpl implements UserDAO {
             }
         }
     }
+
+    @Override
+    public int updatePassword(int userId, String newPassword) throws SQLException {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        String sql_updatePassword = "UPDATE users SET password = ? WHERE user_id = ?";
+        try {
+            conn = DBUtil.getConnection();
+            pstmt = conn.prepareStatement(sql_updatePassword);
+            pstmt.setString(1, newPassword);
+            pstmt.setInt(2, userId);
+            return pstmt.executeUpdate();
+        } finally {
+            DBUtil.close(conn, pstmt, null);
+        }
+    }
 }
