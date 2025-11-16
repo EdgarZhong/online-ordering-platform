@@ -1,16 +1,5 @@
 package com.platform.ordering.api;
 
-import com.platform.ordering.model.Order;
-import com.platform.ordering.model.OrderItem;
-import com.platform.ordering.model.User;
-import com.platform.ordering.util.DBUtil;
-import com.platform.ordering.util.KitchenEventBus;
-
-import javax.servlet.ServletException;
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.sql.Connection;
@@ -21,8 +10,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
+import com.platform.ordering.model.Order;
+import com.platform.ordering.model.OrderItem;
+import com.platform.ordering.model.User;
+import com.platform.ordering.util.DBUtil;
+import com.platform.ordering.util.KitchenEventBus;
 
 @WebServlet(name = "OrdersResourceApiServlet", urlPatterns = "/api/orders/*")
 public class OrdersResourceApiServlet extends HttpServlet {
@@ -58,6 +58,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
                     if (oi > 0) sb.append(',');
                     String restaurantName = fetchRestaurantName(o.getRestaurantId());
                     sb.append('{')
+                            .append("\"restaurantId\":").append(o.getRestaurantId()).append(',')
                             .append("\"orderId\":").append(o.getOrderId()).append(',')
                             .append("\"restaurantName\":\"").append(escape(restaurantName)).append('\"').append(',')
                             .append("\"status\":\"").append(escape(o.getStatus())).append('\"').append(',')
@@ -152,6 +153,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
 
             StringBuilder sb = new StringBuilder();
             sb.append('{')
+                    .append("\"restaurantId\":").append(order.getRestaurantId()).append(',')
                     .append("\"orderId\":").append(order.getOrderId()).append(',')
                     .append("\"restaurantName\":\"").append(escape(restaurantName)).append('\"').append(',')
                     .append("\"status\":\"").append(escape(order.getStatus())).append('\"').append(',')
@@ -272,6 +274,58 @@ public class OrdersResourceApiServlet extends HttpServlet {
             resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             out.write("{\"error\":\"Unauthorized\"}");
             return;
+        }
+        String path = req.getPathInfo();
+        if (path != null && path.matches("/\\d+/cancel")) {
+            String[] parts = path.split("/");
+            int orderId;
+            try {
+                orderId = Integer.parseInt(parts[1]);
+            } catch (Exception e) {
+                resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                out.write("{\"error\":\"Invalid order id\"}");
+                return;
+            }
+            Connection conn = null; PreparedStatement ps = null; ResultSet rs = null; PreparedStatement ups = null;
+            try {
+                conn = DBUtil.getConnection();
+                ps = conn.prepareStatement("SELECT status FROM orders WHERE order_id = ? AND user_id = ?");
+                ps.setInt(1, orderId);
+                ps.setInt(2, user.getUserId());
+                rs = ps.executeQuery();
+                if (!rs.next()) {
+                    resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                    out.write("{\"error\":\"Order not found or permission denied\"}");
+                    return;
+                }
+                String current = rs.getString(1);
+                DBUtil.close(null, ps, rs);
+                boolean allowed = "PENDING".equals(current);
+                if (!allowed) {
+                    resp.setStatus(HttpServletResponse.SC_CONFLICT);
+                    out.write("{\"error\":\"Order cannot be cancelled in current status\"}");
+                    return;
+                }
+                ups = conn.prepareStatement("UPDATE orders SET status = 'CANCELLED' WHERE order_id = ? AND user_id = ? AND status = 'PENDING'");
+                ups.setInt(1, orderId);
+                ups.setInt(2, user.getUserId());
+                int n = ups.executeUpdate();
+                if (n <= 0) {
+                    resp.setStatus(HttpServletResponse.SC_CONFLICT);
+                    out.write("{\"error\":\"Order already updated by others\"}");
+                    return;
+                }
+                resp.setStatus(HttpServletResponse.SC_OK);
+                out.write("{\"orderId\":" + orderId + ",\"status\":\"CANCELLED\"}");
+                return;
+            } catch (SQLException e) {
+                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                out.write("{\"error\":\"Internal server error\"}");
+                return;
+            } finally {
+                DBUtil.close(null, ups, null);
+                DBUtil.close(conn, ps, rs);
+            }
         }
 
         String body = req.getReader().lines().collect(Collectors.joining());

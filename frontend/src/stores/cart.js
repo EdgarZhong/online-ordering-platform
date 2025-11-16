@@ -8,6 +8,18 @@ export const useCartStore = defineStore('cart', {
     getCart: (state) => (restaurantId) => state.carts[restaurantId] || { menus: [], total: 0 }
   },
   actions: {
+    initFromStorage() {
+      try {
+        const raw = localStorage.getItem('consumer_cart')
+        if (raw) {
+          const obj = JSON.parse(raw)
+          if (obj && typeof obj === 'object') this.carts = obj
+        }
+      } catch (e) {}
+    },
+    persist() {
+      try { localStorage.setItem('consumer_cart', JSON.stringify(this.carts)) } catch (e) {}
+    },
     addItem(restaurantId, menuId, item, menuName) {
       const cart = this.carts[restaurantId] || { menus: [], total: 0 }
       let menu = cart.menus.find(m => m.menuId === menuId)
@@ -21,6 +33,7 @@ export const useCartStore = defineStore('cart', {
       }
       cart.total = cart.menus.reduce((s, m) => s + m.items.reduce((ss, it) => ss + (it.price || 0) * (m.isPackage ? (it.quantity * (m.quantity || 1)) : it.quantity), 0), 0)
       this.carts[restaurantId] = cart
+      this.persist()
     },
     addPackage(restaurantId, menuId, items, quantity, menuName, meta) {
       const cart = this.carts[restaurantId] || { menus: [], total: 0 }
@@ -33,6 +46,7 @@ export const useCartStore = defineStore('cart', {
       if (meta) { menu.menuVersion = meta.version || ''; menu.menuSignature = meta.signature || '' }
       cart.total = cart.menus.reduce((s, m) => s + m.items.reduce((ss, it) => ss + (it.price || 0) * (m.isPackage ? (it.quantity * (m.quantity || 1)) : it.quantity), 0), 0)
       this.carts[restaurantId] = cart
+      this.persist()
     },
     updateItemQty(restaurantId, menuId, dishId, qty) {
       const cart = this.carts[restaurantId]
@@ -50,6 +64,7 @@ export const useCartStore = defineStore('cart', {
         }
         cart.total = cart.menus.reduce((s, m) => s + m.items.reduce((ss, it2) => ss + (it2.price || 0) * (m.isPackage ? (it2.quantity * (m.quantity || 1)) : it2.quantity), 0), 0)
       }
+      this.persist()
     },
     updatePackageQty(restaurantId, menuId, qty) {
       const cart = this.carts[restaurantId]
@@ -61,6 +76,7 @@ export const useCartStore = defineStore('cart', {
         cart.menus = cart.menus.filter(m => m.menuId !== menuId)
       }
       cart.total = cart.menus.reduce((s, m) => s + m.items.reduce((ss, it2) => ss + (it2.price || 0) * (m.isPackage ? (it2.quantity * (m.quantity || 1)) : it2.quantity), 0), 0)
+      this.persist()
     },
     removeItem(restaurantId, menuId, dishId) {
       const cart = this.carts[restaurantId]
@@ -72,9 +88,11 @@ export const useCartStore = defineStore('cart', {
         cart.menus = cart.menus.filter(m => m.menuId !== menuId)
       }
       cart.total = cart.menus.reduce((s, m) => s + m.items.reduce((ss, it) => ss + (it.price || 0) * (m.isPackage ? (it.quantity * (m.quantity || 1)) : it.quantity), 0), 0)
+      this.persist()
     },
     clearCart(restaurantId) {
       this.carts[restaurantId] = { menus: [], total: 0 }
+      this.persist()
     },
     toOrderPayload(restaurantId) {
       const cart = this.carts[restaurantId]

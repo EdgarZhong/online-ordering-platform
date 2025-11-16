@@ -41,5 +41,6 @@ export const createOrder = (payload) => instance.post('/orders', payload).then(r
 export const getOrder = (orderId) => instance.get(`/orders/${orderId}`).then(r => r.data)
 export const getSession = () => instance.get('/session').then(r => r.data)
 export const getOrders = () => instance.get('/orders').then(r => r.data)
+export const cancelOrder = (orderId) => instance.post(`/orders/${orderId}/cancel`).then(r => r.data)
 
 export default instance
