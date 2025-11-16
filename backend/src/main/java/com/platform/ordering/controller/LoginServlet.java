@@ -51,7 +51,7 @@ public class LoginServlet extends HttpServlet {
                     }
                 }
                 if ("merchant".equals(user.getRole()) || "superadmin".equals(user.getRole())) {
-                    resp.sendRedirect(req.getContextPath() + "/admin/dashboard.jsp");
+                    resp.sendRedirect(req.getContextPath() + "/admin/dashboard");
                 } else {
                     if (consumerDefaultRedirect != null && !consumerDefaultRedirect.isEmpty()) {
                         resp.sendRedirect(consumerDefaultRedirect);

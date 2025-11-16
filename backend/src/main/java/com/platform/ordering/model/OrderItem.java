@@ -11,6 +11,7 @@ public class OrderItem {
     private BigDecimal unitPrice;
     private String dishName;
     private String menuName;
+    private boolean isPackage;
 
     public int getItemId() { return itemId; }
     public void setItemId(int itemId) { this.itemId = itemId; }
@@ -28,4 +29,6 @@ public class OrderItem {
     public void setDishName(String dishName) { this.dishName = dishName; }
     public String getMenuName() { return menuName; }
     public void setMenuName(String menuName) { this.menuName = menuName; }
+    public boolean isPackage() { return isPackage; }
+    public void setIsPackage(boolean isPackage) { this.isPackage = isPackage; }
 }

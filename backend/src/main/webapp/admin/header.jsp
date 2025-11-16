@@ -14,26 +14,26 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark" style="white-space: nowrap;">
     <div class="container-fluid">
-        <a class="navbar-brand" href="${pageContext.request.contextPath}/admin/dashboard.jsp">商户后台管理</a>
+        <a class="navbar-brand" href="${pageContext.request.contextPath}/admin/dashboard">商户后台管理</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
-                    <a class="nav-link" href="${pageContext.request.contextPath}/admin/dashboard.jsp">仪表盘</a>
+                    <a class="nav-link" href="${pageContext.request.contextPath}/admin/dashboard">仪表盘</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="#">订单管理</a>
+                    <a class="nav-link" href="${pageContext.request.contextPath}/admin/kitchen">厨房面板</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="${pageContext.request.contextPath}/admin/orders">订单管理</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="${pageContext.request.contextPath}/admin/menus">菜单管理</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="${pageContext.request.contextPath}/admin/dishes">菜品管理</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="${pageContext.request.contextPath}/admin/menu-items">菜单项绑定</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="${pageContext.request.contextPath}/admin/restaurant">店铺信息</a>

@@ -4,6 +4,7 @@ import com.platform.ordering.model.Order;
 import com.platform.ordering.model.OrderItem;
 import com.platform.ordering.model.User;
 import com.platform.ordering.util.DBUtil;
+import com.platform.ordering.util.KitchenEventBus;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -451,6 +452,7 @@ public class OrdersResourceApiServlet extends HttpServlet {
             insertItemStmt.executeBatch();
 
             conn.commit();
+            try { KitchenEventBus.get().publishNewOrder(restaurantId, orderId); } catch (Exception ignored) {}
 
             StringBuilder sb = new StringBuilder();
             sb.append('{')

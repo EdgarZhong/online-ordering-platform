@@ -12,6 +12,7 @@ public class Order {
     private String status;
     private Timestamp createdAt;
     private List<OrderItem> items;
+    private int serialNumber;
 
     public int getOrderId() { return orderId; }
     public void setOrderId(int orderId) { this.orderId = orderId; }
@@ -27,4 +28,6 @@ public class Order {
     public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
     public List<OrderItem> getItems() { return items; }
     public void setItems(List<OrderItem> items) { this.items = items; }
+    public int getSerialNumber() { return serialNumber; }
+    public void setSerialNumber(int serialNumber) { this.serialNumber = serialNumber; }
 }

@@ -1,4 +1,45 @@
 # 开发日志
+## 2025-11-16 - by 钟丞（商户端订单管理与厨房面板）
+
+### 本次工作汇总
+
+- 后台订单管理（JSP MVC）：
+  - 新增 `OrdersAdminServlet` 提供列表/详情与状态更新入口（按 `restaurantId` 隔离）。
+  - 列表页 `admin/orders.jsp`：筛选（状态/时间/关键词）、分页整数化、固定列宽与不换行、状态标签（黄/蓝/绿/红），右侧查看详情按钮；移除状态修改入口。
+  - 详情页 `admin/order-detail.jsp`：Bootstrap 美化；菜品“菜单→菜品”二级分组；套餐菜单在标题追加【套餐】；列名“购买单价”（快照价）；顶部概览卡片（ID/顾客/时间/总价/状态）。
+  - DAO 层：新增 `OrderAdminDAO/Impl`，支持分页列表、总数统计、详情（含菜单/菜品）、状态更新；所有 SQL 以 `sql_` 前缀，严格过滤 `restaurant_id`。
+
+- 厨房面板（触发式刷新）：
+  - 新增 `KitchenBoardServlet`：左右两栏（待处理/备餐中）按日期分组竖排显示，卡片含流水号/时间/总价/状态标签，底部“查看详情”。
+  - 引入 SSE：
+    - 事件总线 `KitchenEventBus`（餐厅级发布与订阅）。
+    - 端点 `KitchenEventsServlet` 输出 `hello/ping` 心跳与 `new_order` 事件，保持长连接；断线自动重连。
+    - 下单成功 `OrdersResourceApiServlet` 发布 `new_order`；面板监听后自动刷新。
+
+- 仪表盘与导航：
+  - 新增 `DashboardServlet` 提供今日订单数/收入/待处理/备餐中数据卡片；“今日新订单”卡片跳转订单列表并带今日筛选；底部仅保留“菜单管理/菜品管理”。
+  - 导航栏去重并按厨房→订单→菜单→菜品→店铺顺序。
+
+### 关键修复
+
+- 资源关闭编译错误：统一采用 `DBUtil.close(conn, ps, rs)` 与阶段性关闭 `DBUtil.close(null, ps, rs)`。
+- 分页页码为小数：控制器计算 `pages = (total+size-1)/size`，JSP 使用整数值。
+- 表格切页列宽抖动：`table-layout: fixed + colgroup` 固定列宽并 `nowrap`。
+- 厨房面板 JSP 循环不对称：修复 `c:forEach` 闭合；保持两栏与日期分割线。
+- SSE 初版连接立即断开：移除 `resp.isCommitted` 判断，改用无限心跳循环；前端 `EventSource` 断线自动重连。
+
+### 文件索引
+
+- 控制器：`controller/OrdersAdminServlet.java`, `controller/KitchenBoardServlet.java`, `controller/DashboardServlet.java`, `controller/KitchenEventsServlet.java`
+- 视图：`webapp/admin/orders.jsp`, `webapp/admin/order-detail.jsp`, `webapp/admin/kitchen.jsp`, `webapp/admin/dashboard.jsp`, `webapp/admin/header.jsp`
+- DAO：`dao/OrderAdminDAO.java`, `dao/OrderAdminDAOImpl.java`
+- 工具：`util/KitchenEventBus.java`
+- API 触发：`api/OrdersResourceApiServlet.java`（`commit` 后发布 `new_order`）
+
+### 验收要点
+
+- 商户登录后进入仪表盘，卡片链接跳转正确；厨房面板能在新订单创建时自动刷新；订单列表筛选与分页稳定；详情页分组清晰、套餐标识正确。
+
 ## 2025-11-16 - by 钟丞
 
 ### 本次提交内容：消费者端 Vue SPA 联调闭环（购物车/下单/订单历史）与套餐打包销售逻辑
